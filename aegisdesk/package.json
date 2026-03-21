@@ -1,0 +1,40 @@
+{
+  "name": "aegisdesk",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^1.0.0",
+    "@ai-sdk/openai": "^1.0.0",
+    "@journeyapps/wa-sqlite": "^1.5.0",
+    "@mastra/core": "^0.8.1",
+    "@mlc-ai/web-llm": "^0.2.82",
+    "@neondatabase/neon-js": "^0.2.0-beta.1",
+    "@neondatabase/serverless": "^0.9.5",
+    "@powersync/react": "^1.0.0",
+    "@powersync/web": "^1.36.0",
+    "@supabase/supabase-js": "^2.99.2",
+    "@tanstack/react-query": "^5.91.2",
+    "bcryptjs": "^2.4.3",
+    "jose": "^6.2.2",
+    "next": "16.1.6",
+    "pg": "^8.20.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "resend": "^3.5.0",
+    "uuid": "^9.0.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.0.0"
+  }
+}
