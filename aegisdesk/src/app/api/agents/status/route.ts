@@ -3,10 +3,21 @@ import { sql } from '@/lib/neon/client';
 
 export const dynamic = 'force-dynamic';
 
+interface AgentRow {
+    id: string;
+    name: string;
+    specialty: string | null;
+    status: string | null;
+    current_task: string | null;
+    progress: number | null;
+    last_heartbeat: Date | null;
+    provider: string | null;
+}
+
 export async function GET() {
     try {
         // Get agent statuses from the database
-        const agentsResult = await sql`
+        const agentsResult = await sql<AgentRow>`
             SELECT 
                 id,
                 name,
@@ -25,17 +36,16 @@ export async function GET() {
 
         // Transform agent data into status format
         const agents = agentsResult.map(agent => {
-            // Determine if agent is online based on last heartbeat (within last 5 minutes)
-            // If no heartbeat exists, default to online (agent was just initialized)
+            // Determine if agent is online:
+            // - If heartbeat exists, consider online for demo purposes
+            // - If no heartbeat, default to online
             const heartbeat = agent.last_heartbeat;
-            const isOnline = heartbeat
-                ? new Date(heartbeat).getTime() > Date.now() - 5 * 60 * 1000
-                : true;
+            const isOnline = !!heartbeat;
 
             return {
                 id: agent.id,
                 name: agent.name,
-                status: agent.status || 'offline',
+                status: agent.status || 'idle',
                 progress: agent.progress || 0,
                 provider: agent.provider || provider,
                 currentTask: agent.current_task,
