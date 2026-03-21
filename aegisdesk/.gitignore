@@ -1,0 +1,78 @@
+# Environment files (CRITICAL - never commit sensitive keys)
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+.env.test
+.env.*.local
+
+# Sensitive configuration files
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+service-account.json
+*.secret
+*.credentials
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+.next/
+out/
+
+# Local data (PowerSync local database)
+.local-data/
+
+# Dependencies
+node_modules/
+
+# Package lock files
+package-lock.json
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Test files (do not commit)
+*.test.js
+*.spec.js
+test-*.js
+check-*.js
+
+# Temporary files
+*.tmp
+*.temp
+*.cache/
+
+# SQL dumps
+*.sql.bak
+*.sql.dump
+
+# Git directory
+!.gitignore
+".sync-queue/"  
