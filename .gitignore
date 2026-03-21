@@ -2,7 +2,26 @@
 # AegisDesk - Git Ignore Rules
 # ===========================================
 
-# Environment files (CRITICAL - never commit)
+# All environment files (CRITICAL - never commit)
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+.env.test
+.env.staging
+aegisdesk/.env
+aegisdesk/.env.local
+aegisdesk/.env.development
+aegisdesk/.env.production
+aegisdesk/.env.staging
+aegisdesk/.env.test
+
+# BUT keep .env.example for users to copy
+!.env.example
+aegisdesk/.env.example
+
+# Sensitive configuration files
 .env
 .env.local
 .env.development
