@@ -24,21 +24,25 @@ export async function GET() {
         const provider = useOpenAI ? 'openai' : 'gemini';
 
         // Transform agent data into status format
-        const agents = agentsResult.map(agent => ({
-            id: agent.id,
-            name: agent.name,
-            status: agent.status || 'offline',
-            progress: agent.progress || 0,
-            provider: agent.provider || provider,
-            currentTask: agent.current_task,
-            lastHeartbeat: agent.last_heartbeat,
+        const agents = agentsResult.map(agent => {
             // Determine if agent is online based on last heartbeat (within last 5 minutes)
             // If no heartbeat exists, default to online (agent was just initialized)
             const heartbeat = agent.last_heartbeat;
             const isOnline = heartbeat
                 ? new Date(heartbeat).getTime() > Date.now() - 5 * 60 * 1000
                 : true;
-        }));
+
+            return {
+                id: agent.id,
+                name: agent.name,
+                status: agent.status || 'offline',
+                progress: agent.progress || 0,
+                provider: agent.provider || provider,
+                currentTask: agent.current_task,
+                lastHeartbeat: heartbeat,
+                isOnline
+            };
+        });
 
         // Calculate overall status
         const workingCount = agents.filter(a => a.status === 'working').length;
