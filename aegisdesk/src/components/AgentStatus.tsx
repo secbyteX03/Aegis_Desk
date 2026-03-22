@@ -175,15 +175,15 @@ export default function AgentStatus({ variant = "floating", demoAgents }: AgentS
             }
         };
 
-        // Always use dark theme for the agent section - this ensures visibility in both light and dark mode
-        const containerBg = "rgba(22, 22, 28, 0.95)";
-        const borderColor = "rgba(255,255,255,0.1)";
-        const textColor = "#ffffff";  // Pure white for maximum visibility
-        const subTextColor = "#a0aec0";  // Brighter gray for status
-        const mutedTextColor = "#718096";  // Brighter muted text
-        const dividerColor = "rgba(255,255,255,0.15)";
-        const buttonBg = "rgba(0,0,0,0.3)";
-        const progressBg = "rgba(255,255,255,0.15)";
+        // Use theme variables for both light and dark modes
+        const containerBg = "var(--bg0, rgba(22, 22, 28, 0.95))";
+        const borderColor = "var(--bd, rgba(255,255,255,0.1))";
+        const textColor = "var(--t0, #ffffff)";  // Theme-aware text color
+        const subTextColor = "var(--t2, #a0aec0)";  // Theme-aware secondary text
+        const mutedTextColor = "var(--t3, #718096)";  // Theme-aware muted text
+        const dividerColor = "var(--bd, rgba(255,255,255,0.15))";
+        const buttonBg = "var(--bg1, rgba(0,0,0,0.3))";
+        const progressBg = "var(--bg2, rgba(255,255,255,0.15))"
 
         return (
             <div style={{
