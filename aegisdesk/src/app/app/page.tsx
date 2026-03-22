@@ -2198,72 +2198,74 @@ function DashboardContent() {
                 <AgentStatus variant="embedded" />
               </div>
             )}
-            <div className="fhdr">
-              <span className={`ldot ${syncStatus.connected ? '' : 'pulse-offline'}`} style={{ background: syncStatus.connected ? 'var(--ok)' : 'var(--er)' }}></span>
-              PowerSync Live {!syncStatus.connected ? '(Offline Mode)' : syncStatus.status === 'syncing' ? '(syncing...)' : ''}
-            </div>
+            <div className="powersync-terminal">
+              <div className="fhdr">
+                <span className={`ldot ${syncStatus.connected ? '' : 'pulse-offline'}`} style={{ background: syncStatus.connected ? 'var(--ok)' : 'var(--er)' }}></span>
+                PowerSync Live {!syncStatus.connected ? '(Offline Mode)' : syncStatus.status === 'syncing' ? '(syncing...)' : ''}
+              </div>
 
-            {/* Last Sync Timestamp */}
-            <div className="last-sync-timestamp">
-              Last Sync: {lastSyncTime}
-            </div>
+              {/* Last Sync Timestamp */}
+              <div className="last-sync-timestamp">
+                Last Sync: {lastSyncTime}
+              </div>
 
-            {/* Recent Activity with Agent Specificity */}
-            <div className="recent-activity-section">
-              <div className="recent-activity-header">Recent Activity</div>
-              <div className="recent-activity-list">
-                {activities.length > 0 ? (
-                  activities.slice(0, 5).map((activity, idx) => {
-                    const agentBadge = getAgentBadge(activity.agent || 'Unknown');
+              {/* Recent Activity with Agent Specificity */}
+              <div className="recent-activity-section">
+                <div className="recent-activity-header">Recent Activity</div>
+                <div className="recent-activity-list">
+                  {activities.length > 0 ? (
+                    activities.slice(0, 5).map((activity, idx) => {
+                      const agentBadge = getAgentBadge(activity.agent || 'Unknown');
+                      return (
+                        <div key={activity.id || idx} className="recent-activity-item">
+                          <span className="recent-agent-badge" style={{ background: agentBadge.bg, borderColor: agentBadge.border, color: agentBadge.color }}>
+                            {agentBadge.icon} {activity.agent || 'User'}
+                          </span>
+                          <span className="recent-action-text">
+                            {activity.action}: {activity.message.substring(0, 40)}{activity.message.length > 40 ? '...' : ''}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="recent-activity-empty">No recent activity</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Table Sync Status */}
+              <div className="flist" id="flist">
+                {syncStatus.tables && syncStatus.tables.length > 0 ? (
+                  syncStatus.tables.map((table, idx) => {
+                    // Format display name properly
+                    const displayName = table.displayName?.toLowerCase().includes('incident') ? 'Incidents' :
+                      table.displayName?.toLowerCase().includes('timeline') ? 'Timeline' :
+                        table.displayName?.toLowerCase().includes('agent') ? 'Agents' :
+                          table.displayName || table.name;
                     return (
-                      <div key={activity.id || idx} className="recent-activity-item">
-                        <span className="recent-agent-badge" style={{ background: agentBadge.bg, borderColor: agentBadge.border, color: agentBadge.color }}>
-                          {agentBadge.icon} {activity.agent || 'User'}
-                        </span>
-                        <span className="recent-action-text">
-                          {activity.action}: {activity.message.substring(0, 40)}{activity.message.length > 40 ? '...' : ''}
-                        </span>
+                      <div key={table.name || idx} className="fl-item synced-record-item">
+                        <span className="fl-dot" style={{ background: table.status === 'synced' ? 'var(--ok)' : 'var(--al)' }}></span>
+                        <span className="fl-msg"><span className="synced-label">Synced</span> {displayName} <span className="record-count">({table.count} {table.count === 1 ? 'record' : 'records'})</span></span>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="recent-activity-empty">No recent activity</div>
+                  <>
+                    <div className="fl-item synced-record-item">
+                      <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
+                      <span className="fl-msg"><span className="synced-label">Synced</span> Incidents <span className="record-count">(1 record)</span></span>
+                    </div>
+                    <div className="fl-item synced-record-item">
+                      <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
+                      <span className="fl-msg"><span className="synced-label">Synced</span> Timeline <span className="record-count">(4 records)</span></span>
+                    </div>
+                    <div className="fl-item synced-record-item">
+                      <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
+                      <span className="fl-msg"><span className="synced-label">Synced</span> Agents <span className="record-count">(4 records)</span></span>
+                    </div>
+                  </>
                 )}
               </div>
-            </div>
-
-            {/* Table Sync Status */}
-            <div className="flist" id="flist">
-              {syncStatus.tables && syncStatus.tables.length > 0 ? (
-                syncStatus.tables.map((table, idx) => {
-                  // Format display name properly
-                  const displayName = table.displayName?.toLowerCase().includes('incident') ? 'Incidents' :
-                    table.displayName?.toLowerCase().includes('timeline') ? 'Timeline' :
-                      table.displayName?.toLowerCase().includes('agent') ? 'Agents' :
-                        table.displayName || table.name;
-                  return (
-                    <div key={table.name || idx} className="fl-item synced-record-item">
-                      <span className="fl-dot" style={{ background: table.status === 'synced' ? 'var(--ok)' : 'var(--al)' }}></span>
-                      <span className="fl-msg"><span className="synced-label">Synced</span> {displayName} <span className="record-count">({table.count} {table.count === 1 ? 'record' : 'records'})</span></span>
-                    </div>
-                  );
-                })
-              ) : (
-                <>
-                  <div className="fl-item synced-record-item">
-                    <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
-                    <span className="fl-msg"><span className="synced-label">Synced</span> Incidents <span className="record-count">(1 record)</span></span>
-                  </div>
-                  <div className="fl-item synced-record-item">
-                    <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
-                    <span className="fl-msg"><span className="synced-label">Synced</span> Timeline <span className="record-count">(4 records)</span></span>
-                  </div>
-                  <div className="fl-item synced-record-item">
-                    <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
-                    <span className="fl-msg"><span className="synced-label">Synced</span> Agents <span className="record-count">(4 records)</span></span>
-                  </div>
-                </>
-              )}
             </div>
 
 

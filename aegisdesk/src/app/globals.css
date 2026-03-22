@@ -2836,6 +2836,115 @@ body {
   opacity: 0.7;
 }
 
+/* Terminal-style PowerSync Live Section */
+.powersync-terminal {
+  background: #0a0a0a !important;
+  font-family: 'Courier New', Courier, monospace !important;
+}
+
+.powersync-terminal .fhdr {
+  background: #001100 !important;
+  color: #00ff00 !important;
+  text-shadow: 0 0 5px #00ff00 !important;
+}
+
+.powersync-terminal .last-sync-timestamp {
+  color: #00ff00 !important;
+  font-family: 'Courier New', Courier, monospace !important;
+  font-size: 11px !important;
+  text-shadow: 0 0 3px #00ff00 !important;
+  background: #001100 !important;
+}
+
+.powersync-terminal .flist {
+  background: #0a0a0a !important;
+}
+
+.powersync-terminal .fl-item,
+.powersync-terminal .synced-record-item {
+  color: #00ff00 !important;
+  font-family: 'Courier New', Courier, monospace !important;
+  font-size: 12px !important;
+  padding-left: 8px !important;
+  margin-bottom: 4px !important;
+  background: rgba(0, 255, 0, 0.02) !important;
+}
+
+.powersync-terminal .fl-dot {
+  background: #00ff00 !important;
+  box-shadow: 0 0 5px #00ff00 !important;
+}
+
+.powersync-terminal .fl-msg {
+  color: #00ff00 !important;
+  font-family: 'Courier New', Courier, monospace !important;
+}
+
+.powersync-terminal .synced-label {
+  color: #00ff00 !important;
+  font-weight: bold !important;
+  text-shadow: 0 0 3px #00ff00 !important;
+}
+
+.powersync-terminal .record-count {
+  color: #00cc00 !important;
+}
+
+.powersync-terminal .recent-activity-section {
+  background: #0a0a0a !important;
+}
+
+.powersync-terminal .recent-activity-header {
+  color: #00ff00 !important;
+  font-family: 'Courier New', Courier, monospace !important;
+  text-shadow: 0 0 3px #00ff00 !important;
+  background: #001100 !important;
+}
+
+.powersync-terminal .recent-activity-item {
+  color: #00ff00 !important;
+  font-family: 'Courier New', Courier, monospace !important;
+  font-size: 11px !important;
+  padding-left: 6px !important;
+  background: rgba(0, 255, 0, 0.02) !important;
+}
+
+.powersync-terminal .recent-agent-badge {
+  color: #00ff00 !important;
+  background: #001100 !important;
+  font-family: 'Courier New', Courier, monospace !important;
+  text-shadow: 0 0 2px #00ff00 !important;
+}
+
+.powersync-terminal .recent-action-text {
+  color: #00ff00 !important;
+  font-family: 'Courier New', Courier, monospace !important;
+}
+
+.powersync-terminal .ldot {
+  box-shadow: 0 0 8px #00ff00 !important;
+  background: #00ff00 !important;
+}
+
+/* Blinking cursor effect for terminal */
+@keyframes terminal-blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+.powersync-terminal .terminal-cursor::after {
+  content: '_';
+  animation: terminal-blink 1s infinite;
+  color: #00ff00 !important;
+}
+
 /* Animations */
 @keyframes pulse {
 
