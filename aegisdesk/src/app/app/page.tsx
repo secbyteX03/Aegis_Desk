@@ -174,7 +174,7 @@ function DashboardContent() {
   const [newIncDesc, setNewIncDesc] = useState("");
   const [newIncSvc, setNewIncSvc] = useState("");
   const [logInput, setLogInput] = useState("");
-  const [ingestedLogs, setIngestedLogs] = useState<string[]>([]);
+  const [ingestedLogs, setIngestedLogs] = useState<{ id: string; incident_id: string; content: string; timestamp: string }[]>([]);
   const [newMName, setNewMName] = useState("");
   const [newMEmail, setNewMEmail] = useState("");
   const [newMRole, setNewMRole] = useState("Engineer");
@@ -968,11 +968,54 @@ function DashboardContent() {
     }
   };
 
+  // Helper to save logs to localStorage
+  const saveLogsToStorage = (logs: { id: string; incident_id: string; content: string; timestamp: string }[]) => {
+    try {
+      localStorage.setItem('aegisdesk_ingested_logs', JSON.stringify(logs));
+    } catch (e) {
+      console.error('Failed to save logs to localStorage:', e);
+    }
+  };
+
+  // Helper to load logs from localStorage
+  const loadLogsFromStorage = () => {
+    try {
+      const stored = localStorage.getItem('aegisdesk_ingested_logs');
+      if (stored) {
+        return JSON.parse(stored) as { id: string; incident_id: string; content: string; timestamp: string }[];
+      }
+    } catch (e) {
+      console.error('Failed to load logs from localStorage:', e);
+    }
+    return [];
+  };
+
+  // Load logs from localStorage on mount
+  useEffect(() => {
+    const storedLogs = loadLogsFromStorage();
+    if (storedLogs.length > 0) {
+      setIngestedLogs(storedLogs);
+    }
+  }, []);
+
   const ingestLogs = () => {
     if (!logInput.trim()) return;
+    if (!selectedIncident) return;
 
-    // Store the full log content
-    setIngestedLogs(prev => [...prev, logInput]);
+    const incidentId = selectedIncident.id;
+    const newLog = {
+      id: `log-${Date.now()}`,
+      incident_id: incidentId,
+      content: logInput,
+      timestamp: new Date().toISOString()
+    };
+
+    // Store the full log content with metadata
+    setIngestedLogs(prev => {
+      const updated = [...prev, newLog];
+      saveLogsToStorage(updated);
+      return updated;
+    });
 
     const logEvent: TimelineEvent = {
       id: `log-${Date.now()}`,
@@ -1889,14 +1932,23 @@ function DashboardContent() {
                   ) : (
                     <>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                        <h4>Log Entries ({ingestedLogs.length})</h4>
+                        <h4>Log Entries ({selectedIncident ? ingestedLogs.filter(l => l.incident_id === selectedIncident.id && l.incident_id !== 'unassigned').length : 0})</h4>
                         <button className="btn-ghost" onClick={() => setShowLogsModal(true)}>Paste More</button>
                       </div>
-                      {ingestedLogs.map((log, idx) => (
-                        <div key={idx} className="log-line" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                          {log}
+                      {!selectedIncident ? (
+                        <div className="ws-empty">
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          <p>Select an incident to view or add logs</p>
                         </div>
-                      ))}
+                      ) : (
+                        ingestedLogs.filter(l => l.incident_id === selectedIncident.id && l.incident_id !== 'unassigned').map((log, idx) => (
+                          <div key={log.id} className="log-line" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                            {log.content}
+                          </div>
+                        ))
+                      )}
                     </>
                   )}
                 </div>
