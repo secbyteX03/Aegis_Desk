@@ -260,6 +260,25 @@ export class NeonAuth {
         }
     }
 
+    // Verify JWT token (static method)
+    static async verifyToken(token: string): Promise<{ success: boolean; user?: { id: string; email?: string }; error?: string }> {
+        try {
+            const { valid, userId, email } = await verifyToken(token);
+
+            if (!valid || !userId) {
+                return { success: false, error: "Invalid or expired token" };
+            }
+
+            return {
+                success: true,
+                user: { id: userId, email },
+            };
+        } catch (error) {
+            console.error("[NeonAuth] verifyToken error:", error);
+            return { success: false, error: "Token verification failed" };
+        }
+    }
+
     // Verify token and get current user
     static async verify(token: string): Promise<AuthResult> {
         try {
