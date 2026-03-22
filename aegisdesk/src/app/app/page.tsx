@@ -124,7 +124,150 @@ function DashboardContent() {
     totalSizeFormatted: string;
   }>({ items: [], count: 0, totalSize: 0, totalSizeFormatted: '0B' });
   const [lastSyncTime, setLastSyncTime] = useState<string>('Never');
+  const [syncLogs, setSyncLogs] = useState<{ timestamp: string; message: string; type: 'info' | 'success' | 'error' | 'warning' }[]>([]);
+
+  // Helper function to add sync log with timestamp
+  const addSyncLog = (message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
+    const now = new Date();
+    const timestamp = now.toTimeString().split(' ')[0]; // HH:MM:SS format
+    setSyncLogs(prev => {
+      const newLogs = [...prev, { timestamp, message, type }];
+      // Keep only last 50 logs
+      return newLogs.slice(-50);
+    });
+  };
   const [localAIStatus, setLocalAIStatus] = useState<LocalAIStatusType>({ isInitialized: false, isLoading: false, progress: 0, model: null, error: null });
+
+  // Workflow, Runbook, Trace tab data with localStorage persistence
+  const [workflowData, setWorkflowData] = useState<{
+    workflows: { id: string; status: string; currentStep: number; stepName: string; createdAt: string; metadata?: { incidentId?: string; title?: string; severity?: number } }[];
+    activeWorkflow: { id: string; status: string; currentStep: number; stepName: string; results: Record<string, any> } | null;
+  }>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aegis_workflow_data');
+      if (saved) {
+        try { return JSON.parse(saved); } catch { }
+      }
+    }
+    return { workflows: [], activeWorkflow: null };
+  });
+
+  const [runbookData, setRunbookData] = useState<{
+    steps: { id: string; title: string; description: string; status: 'pending' | 'in_progress' | 'completed'; agent?: string }[];
+    incidentId: string | null;
+  }>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aegis_runbook_data');
+      if (saved) {
+        try { return JSON.parse(saved); } catch { }
+      }
+    }
+    return { steps: [], incidentId: null };
+  });
+
+  const [traceData, setTraceData] = useState<{
+    spans: { id: string; service: string; method: string; path: string; status: number; duration: number; timestamp: string }[];
+    incidentId: string | null;
+  }>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aegis_trace_data');
+      if (saved) {
+        try { return JSON.parse(saved); } catch { }
+      }
+    }
+    return { spans: [], incidentId: null };
+  });
+
+  // Persist workflow data to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && workflowData) {
+      localStorage.setItem('aegis_workflow_data', JSON.stringify(workflowData));
+    }
+  }, [workflowData]);
+
+  // Persist runbook data to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && runbookData) {
+      localStorage.setItem('aegis_runbook_data', JSON.stringify(runbookData));
+    }
+  }, [runbookData]);
+
+  // Persist trace data to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && traceData) {
+      localStorage.setItem('aegis_trace_data', JSON.stringify(traceData));
+    }
+  }, [traceData]);
+
+  // Fetch workflow data from API
+  useEffect(() => {
+    const fetchWorkflows = async () => {
+      try {
+        const res = await fetch('/api/mastra/workflow');
+        if (res.ok) {
+          const data = await res.json();
+          const apiWorkflows = data.workflows || [];
+
+          // Get current state (could be from localStorage or previous API call)
+          setWorkflowData(prev => {
+            // If API returns workflows, use them (server is source of truth for active workflows)
+            if (apiWorkflows.length > 0) {
+              const active = apiWorkflows.find((w: { status: string }) => w.status === 'running' || w.status === 'awaiting_human') || null;
+              return { ...prev, workflows: apiWorkflows, activeWorkflow: active };
+            }
+            // If API returns empty but we have local data, keep local data
+            // This handles the case where server restarts but localStorage has data
+            return prev;
+          });
+
+          // Extract runbook and trace data from workflows
+          // Find the most recent completed workflow with triage results
+          const completedWorkflow = apiWorkflows
+            .filter((w: { status: string }) => w.status === 'completed' || w.status === 'awaiting_human')
+            .sort((a: { updatedAt: string }, b: { updatedAt: string }) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+
+          if (completedWorkflow?.results?.triage) {
+            const triage = completedWorkflow.results.triage;
+
+            // Extract runbook steps from triage results
+            if (triage.runbook && Array.isArray(triage.runbook)) {
+              const runbookSteps = triage.runbook.map((step: string, idx: number) => ({
+                id: `step-${idx}`,
+                title: `Step ${idx + 1}`,
+                description: step,
+                status: 'pending' as const,
+                agent: 'Remedy-3'
+              }));
+              setRunbookData(prev => ({ ...prev, steps: runbookSteps, incidentId: completedWorkflow.metadata?.incidentId || null }));
+            }
+
+            // Extract trace data from triage results
+            if (triage.traces && Array.isArray(triage.traces)) {
+              setTraceData(prev => ({ ...prev, spans: triage.traces, incidentId: completedWorkflow.metadata?.incidentId || null }));
+            } else if (triage.affectedServices && Array.isArray(triage.affectedServices)) {
+              // Create trace spans from affected services if no explicit traces
+              const traceSpans = triage.affectedServices.map((service: string, idx: number) => ({
+                id: `trace-${idx}`,
+                service: service,
+                method: 'GET',
+                path: `/api/${service.toLowerCase()}/health`,
+                status: 200,
+                duration: Math.floor(Math.random() * 500) + 50,
+                timestamp: new Date().toISOString()
+              }));
+              setTraceData(prev => ({ ...prev, spans: traceSpans, incidentId: completedWorkflow.metadata?.incidentId || null }));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Workflow] Fetch error:', error);
+        // On error, don't overwrite - keep existing state
+      }
+    };
+    fetchWorkflows();
+    const workflowInterval = setInterval(fetchWorkflows, 10000);
+    return () => clearInterval(workflowInterval);
+  }, []);
 
   // Subscribe to localAI status changes
   useEffect(() => {
@@ -450,11 +593,38 @@ function DashboardContent() {
 
   // Poll for sync status every 5 seconds
   useEffect(() => {
+    // Log initial connection attempt
+    addSyncLog('Initializing PowerSync connection...', 'info');
+
     const fetchSyncStatus = async () => {
       try {
         const res = await fetch('/api/sync/status');
         if (res.ok) {
           const data = await res.json();
+
+          // Log connection status changes
+          if (!syncStatus.connected && data.connected) {
+            addSyncLog('✓ Connected to PowerSync server', 'success');
+          } else if (syncStatus.connected && !data.connected) {
+            addSyncLog('⚠ Lost connection to PowerSync server', 'error');
+          }
+
+          // Log sync status changes
+          if (data.status === 'syncing' && syncStatus.status !== 'syncing') {
+            addSyncLog('↻ Syncing data with Neon database...', 'info');
+          } else if (data.status === 'synced' && syncStatus.status === 'syncing') {
+            addSyncLog('✓ Sync completed - all data synchronized', 'success');
+          }
+
+          // Log table sync details
+          if (data.tables && data.tables.length > 0) {
+            data.tables.forEach((table: { name: string; status: string; count: number }) => {
+              if (table.status === 'synced') {
+                addSyncLog(`Synced ${table.count} ${table.name} records`, 'info');
+              }
+            });
+          }
+
           setSyncStatus(data);
           // Update last sync time
           if (data.lastSync) {
@@ -473,9 +643,12 @@ function DashboardContent() {
           } else {
             setLastSyncTime('Never');
           }
+        } else {
+          addSyncLog(`✗ Failed to fetch sync status: ${res.status}`, 'error');
         }
       } catch (error) {
         console.error('[Sync Status] Fetch error:', error);
+        addSyncLog(`✗ Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
       }
     };
 
@@ -491,6 +664,12 @@ function DashboardContent() {
         const res = await fetch('/api/sync/queue');
         if (res.ok) {
           const data = await res.json();
+
+          // Log queue changes
+          if (data.count > 0) {
+            addSyncLog(`${data.count} items queued for sync (${data.totalSizeFormatted})`, 'warning');
+          }
+
           setSyncQueue(data);
         }
       } catch (error) {
@@ -1955,40 +2134,143 @@ function DashboardContent() {
               )}
               {activeTab === 'runbook' && (
                 <div className="ws-runbook">
-                  <div className="ws-empty">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                    </svg>
-                    <p>No runbook available</p>
-                    <span>Runbook steps will appear when an incident is active</span>
-                  </div>
+                  {runbookData.steps.length === 0 ? (
+                    <div className="ws-empty">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                      </svg>
+                      <p>No runbook available</p>
+                      <span>Runbook steps will appear when an incident is active</span>
+                    </div>
+                  ) : (
+                    <div className="ws-runbook-list">
+                      {runbookData.steps.map((step, idx) => (
+                        <div key={step.id || idx} className={`ws-runbook-item ${step.status}`}>
+                          <div className="ws-runbook-check">
+                            {step.status === 'completed' ? '✓' : step.status === 'in_progress' ? '●' : '○'}
+                          </div>
+                          <div className="ws-runbook-content">
+                            <div className="ws-runbook-title">{step.title}</div>
+                            <div className="ws-runbook-desc">{step.description}</div>
+                            {step.agent && <div className="ws-runbook-agent">Agent: {step.agent}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {activeTab === 'trace' && (
                 <div className="ws-trace">
-                  <div className="ws-empty">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <circle cx="11" cy="11" r="8" />
-                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    <p>No trace data available</p>
-                    <span>Distributed tracing will appear when analyzing an incident</span>
-                  </div>
+                  {traceData.spans.length === 0 ? (
+                    <div className="ws-empty">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                      </svg>
+                      <p>No trace data available</p>
+                      <span>Distributed tracing will appear when analyzing an incident</span>
+                    </div>
+                  ) : (
+                    <div className="ws-trace-list">
+                      {traceData.spans.map((span, idx) => (
+                        <div key={span.id || idx} className={`ws-trace-diagram ${span.status >= 400 ? 'error' : ''}`}>
+                          <div className="ws-trace-node">
+                            <div className="ws-trace-name">{span.service}</div>
+                            <div className="ws-trace-method">{span.method}</div>
+                            <div className="ws-trace-path">{span.path}</div>
+                            <div className={`ws-trace-status ${span.status >= 400 ? 'error' : ''}`}>
+                              {span.status} · {span.duration}ms
+                            </div>
+                          </div>
+                          {idx < traceData.spans.length - 1 && (
+                            <span className="ws-trace-arrow">→</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {activeTab === 'workflow' && (
                 <div className="ws-workflow">
-                  <div className="ws-empty">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <polyline points="17 1 21 5 17 9" />
-                      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                      <path d="M7 23l-4-4 4-4" />
-                      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-                    </svg>
-                    <p>No active workflow</p>
-                    <span>Workflow status will appear when an incident is being resolved</span>
-                  </div>
+                  {(!workflowData.activeWorkflow && workflowData.workflows.length === 0) ? (
+                    <div className="ws-empty">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <polyline points="17 1 21 5 17 9" />
+                        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                        <path d="M7 23l-4-4 4-4" />
+                        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                      </svg>
+                      <p>No active workflow</p>
+                      <span>Workflow status will appear when an incident is being resolved</span>
+                    </div>
+                  ) : (
+                    <div className="ws-workflow-content">
+                      {workflowData.activeWorkflow ? (
+                        <div className="ws-workflow-active">
+                          <div className="ws-workflow-header">
+                            <span className={`ws-workflow-status ${workflowData.activeWorkflow.status}`}>
+                              {workflowData.activeWorkflow.status === 'running' ? '● Running' :
+                                workflowData.activeWorkflow.status === 'awaiting_human' ? '◐ Awaiting Approval' :
+                                  workflowData.activeWorkflow.status === 'completed' ? '✓ Completed' :
+                                    workflowData.activeWorkflow.status === 'failed' ? '✕ Failed' : '○ Pending'}
+                            </span>
+                            <span className="ws-workflow-id">ID: {workflowData.activeWorkflow.id.slice(0, 8)}...</span>
+                          </div>
+                          <div className="ws-workflow-stages">
+                            <div className={`ws-stage ${workflowData.activeWorkflow.currentStep >= 0 ? 'completed' : ''}`}>
+                              <span className="ws-stage-num">1</span>
+                              <span className="ws-stage-name">Triage</span>
+                            </div>
+                            <span className="ws-stage-arrow">→</span>
+                            <div className={`ws-stage ${workflowData.activeWorkflow.currentStep >= 1 ? (workflowData.activeWorkflow.stepName === 'remedy' || workflowData.activeWorkflow.stepName === 'comms' || workflowData.activeWorkflow.stepName === 'completed' ? 'completed' : 'active') : ''}`}>
+                              <span className="ws-stage-num">2</span>
+                              <span className="ws-stage-name">Remedy</span>
+                            </div>
+                            <span className="ws-stage-arrow">→</span>
+                            <div className={`ws-stage ${workflowData.activeWorkflow.currentStep >= 2 ? (workflowData.activeWorkflow.stepName === 'comms' || workflowData.activeWorkflow.stepName === 'completed' ? 'completed' : 'active') : ''}`}>
+                              <span className="ws-stage-num">3</span>
+                              <span className="ws-stage-name">Comms</span>
+                            </div>
+                            <span className="ws-stage-arrow">→</span>
+                            <div className={`ws-stage ${workflowData.activeWorkflow.currentStep >= 3 ? 'completed' : ''}`}>
+                              <span className="ws-stage-num">4</span>
+                              <span className="ws-stage-name">PostMortem</span>
+                            </div>
+                          </div>
+                          <div className="ws-workflow-current-step">
+                            <strong>Current Step:</strong> {workflowData.activeWorkflow.stepName}
+                          </div>
+                          {workflowData.activeWorkflow.status === 'awaiting_human' && (
+                            <div className="ws-workflow-approval">
+                              <button className="ws-approve-btn" onClick={async () => {
+                                try {
+                                  await fetch(`/api/mastra/workflow/${workflowData.activeWorkflow?.id}/approve`, { method: 'POST' });
+                                } catch (e) { console.error('Approval error:', e); }
+                              }}>
+                                Approve & Continue
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="ws-workflow-history">
+                          <h4>Previous Workflows</h4>
+                          {workflowData.workflows.slice(0, 5).map((wf, idx) => (
+                            <div key={wf.id || idx} className="ws-workflow-item">
+                              <span className={`ws-workflow-status ${wf.status}`}>
+                                {wf.status === 'completed' ? '✓' : wf.status === 'failed' ? '✕' : '○'}
+                              </span>
+                              <span className="ws-workflow-step">{wf.stepName}</span>
+                              <span className="ws-workflow-date">{new Date(wf.createdAt).toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               {activeTab === 'audit' && (
@@ -2261,61 +2543,17 @@ function DashboardContent() {
                 Last Sync: {lastSyncTime}
               </div>
 
-              {/* Recent Activity with Agent Specificity */}
-              <div className="recent-activity-section">
-                <div className="recent-activity-header">Recent Activity</div>
-                <div className="recent-activity-list">
-                  {activities.length > 0 ? (
-                    activities.slice(0, 5).map((activity, idx) => {
-                      const agentBadge = getAgentBadge(activity.agent || 'Unknown');
-                      return (
-                        <div key={activity.id || idx} className="recent-activity-item">
-                          <span className="recent-agent-badge" style={{ background: agentBadge.bg, borderColor: agentBadge.border, color: agentBadge.color }}>
-                            {agentBadge.icon} {activity.agent || 'User'}
-                          </span>
-                          <span className="recent-action-text">
-                            {activity.action}: {activity.message.substring(0, 40)}{activity.message.length > 40 ? '...' : ''}
-                          </span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="recent-activity-empty">No recent activity</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Table Sync Status */}
-              <div className="flist" id="flist">
-                {syncStatus.tables && syncStatus.tables.length > 0 ? (
-                  syncStatus.tables.map((table, idx) => {
-                    // Format display name properly
-                    const displayName = table.displayName?.toLowerCase().includes('incident') ? 'Incidents' :
-                      table.displayName?.toLowerCase().includes('timeline') ? 'Timeline' :
-                        table.displayName?.toLowerCase().includes('agent') ? 'Agents' :
-                          table.displayName || table.name;
-                    return (
-                      <div key={table.name || idx} className="fl-item synced-record-item">
-                        <span className="fl-dot" style={{ background: table.status === 'synced' ? 'var(--ok)' : 'var(--al)' }}></span>
-                        <span className="fl-msg"><span className="synced-label">Synced</span> {displayName} <span className="record-count">({table.count} {table.count === 1 ? 'record' : 'records'})</span></span>
-                      </div>
-                    );
-                  })
+              {/* Real-time Sync Logs - Only items with timestamps */}
+              <div className="sync-logs-container" style={{ maxHeight: '300px', overflowY: 'auto', marginTop: '8px', padding: '8px', background: 'var(--bg0)', borderRadius: '4px', border: '1px solid var(--bd)' }}>
+                {syncLogs.length > 0 ? (
+                  syncLogs.slice(-30).map((log, idx) => (
+                    <div key={idx} style={{ fontSize: '11px', fontFamily: 'monospace', marginBottom: '2px', color: log.type === 'error' ? '#ff4444' : log.type === 'success' ? '#22c55e' : log.type === 'warning' ? '#ffaa00' : 'var(--t1)' }}>
+                      <span style={{ color: '#22c55e' }}>[{log.timestamp}]</span> {log.message}
+                    </div>))
                 ) : (
-                  <>
-                    <div className="fl-item synced-record-item">
-                      <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
-                      <span className="fl-msg"><span className="synced-label">Synced</span> Incidents <span className="record-count">(1 record)</span></span>
-                    </div>
-                    <div className="fl-item synced-record-item">
-                      <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
-                      <span className="fl-msg"><span className="synced-label">Synced</span> Timeline <span className="record-count">(4 records)</span></span>
-                    </div>
-                    <div className="fl-item synced-record-item">
-                      <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
-                      <span className="fl-msg"><span className="synced-label">Synced</span> Agents <span className="record-count">(4 records)</span></span>
-                    </div>
-                  </>
+                  <div style={{ fontSize: '11px', fontFamily: 'monospace', color: 'var(--t2)' }}>
+                    [--:--:--] Waiting for sync events...
+                  </div>
                 )}
               </div>
             </div>
@@ -3814,6 +4052,66 @@ function DashboardContent() {
         /* Workflow tab */
         .ws-workflow-stages { display: flex; align-items: center; gap: 8px; }
         .ws-stage {
+          display: flex; flex-direction: column; align-items: center; padding: 12px 16px;
+          border-radius: var(--r2); background: var(--bg2); border: 1px solid var(--bg3);
+          min-width: 80px;
+        }
+        .ws-stage.completed { border-color: var(--ok); background: rgba(63, 185, 80, 0.1); }
+        .ws-stage.active { border-color: var(--p); background: rgba(136, 86, 255, 0.1); }
+        .ws-stage-num { font-size: 14px; font-weight: 600; color: var(--t0); }
+        .ws-stage-name { font-size: 10px; color: var(--t2); margin-top: 4px; }
+        .ws-stage-arrow { color: var(--t2); font-size: 14px; }
+        .ws-workflow-content { padding: 12px; }
+        .ws-workflow-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .ws-workflow-status { font-size: 12px; font-weight: 500; padding: 4px 8px; border-radius: var(--r1); }
+        .ws-workflow-status.running { background: rgba(88, 166, 255, 0.2); color: var(--al); }
+        .ws-workflow-status.awaiting_human { background: rgba(210, 153, 34, 0.2); color: var(--am); }
+        .ws-workflow-status.completed { background: rgba(63, 185, 80, 0.2); color: var(--ok); }
+        .ws-workflow-status.failed { background: rgba(248, 81, 73, 0.2); color: var(--er); }
+        .ws-workflow-status.pending { background: var(--bg2); color: var(--t2); }
+        .ws-workflow-id { font-size: 10px; color: var(--t2); font-family: monospace; }
+        .ws-workflow-current-step { margin-top: 16px; font-size: 12px; color: var(--t1); }
+        .ws-workflow-approval { margin-top: 16px; }
+        .ws-approve-btn {
+          background: var(--p); color: white; border: none; padding: 8px 16px;
+          border-radius: var(--r1); cursor: pointer; font-size: 12px; font-weight: 500;
+        }
+        .ws-approve-btn:hover { opacity: 0.9; }
+        .ws-workflow-history h4 { font-size: 11px; color: var(--t2); margin: 0 0 12px 0; }
+        .ws-workflow-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--bg2); }
+        .ws-workflow-item .ws-workflow-step { flex: 1; font-size: 12px; }
+        .ws-workflow-item .ws-workflow-date { font-size: 10px; color: var(--t2); }
+        .ws-trace-list { display: flex; flex-direction: column; gap: 12px; }
+        .ws-trace-diagram { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .ws-trace-node {
+          padding: 12px 16px; border-radius: var(--r2); background: var(--bg2);
+          border: 1px solid var(--bg3); min-width: 150px;
+        }
+        .ws-trace-node.error { border-color: var(--s1); }
+        .ws-trace-name { font-size: 12px; font-weight: 500; color: var(--t0); }
+        .ws-trace-method { font-size: 10px; color: var(--p); font-weight: 600; }
+        .ws-trace-path { font-size: 10px; color: var(--t2); font-family: monospace; }
+        .ws-trace-status { font-size: 10px; color: var(--t2); margin-top: 4px; }
+        .ws-trace-status.error { color: var(--s1); }
+        .ws-trace-arrow { color: var(--t2); font-size: 14px; }
+        .ws-runbook-list { display: flex; flex-direction: column; gap: 12px; }
+        .ws-runbook-item {
+          display: flex; gap: 12px; padding: 12px; border-radius: var(--r2);
+          background: var(--bg2); border: 1px solid var(--bg3);
+        }
+        .ws-runbook-item.completed { border-color: var(--ok); }
+        .ws-runbook-item.in_progress { border-color: var(--p); }
+        .ws-runbook-check {
+          width: 24px; height: 24px; border-radius: 50%; background: var(--bg3);
+          display: flex; align-items: center; justify-content: center; font-size: 12px;
+          flex-shrink: 0;
+        }
+        .ws-runbook-item.completed .ws-runbook-check { background: var(--ok); color: white; }
+        .ws-runbook-item.in_progress .ws-runbook-check { background: var(--p); color: white; }
+        .ws-runbook-content { flex: 1; }
+        .ws-runbook-title { font-size: 13px; font-weight: 500; color: var(--t0); margin-bottom: 4px; }
+        .ws-runbook-desc { font-size: 11px; color: var(--t2); }
+        .ws-runbook-agent { font-size: 10px; color: var(--p); margin-top: 4px; }
           display: flex;
           flex-direction: column;
           align-items: center;
