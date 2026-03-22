@@ -2,16 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
 import { PowerSyncProvider, usePowerSync } from "@/components/PowerSyncProvider";
 import AgentStatus from "@/components/AgentStatus";
 import "../globals.css";
 
-// Dynamic import for LocalAIStatus to avoid SSR issues with WebLLM
-const LocalAIStatus = dynamic(() => import("@/components/LocalAIStatus"), {
-  ssr: false,
-  loading: () => <div className="text-xs text-gray-400 p-2">Loading Local AI...</div>,
-});
+// Import localAI for status tracking
+import { localAI, LocalAIStatus as LocalAIStatusType } from "@/lib/local-ai";
 
 interface Incident {
   id: string;
@@ -121,6 +117,39 @@ function DashboardContent() {
     tables: [],
     status: 'synced'
   });
+  const [syncQueue, setSyncQueue] = useState<{
+    items: { id: string; source: string; actionType: string; table: string; payload: Record<string, unknown>; payloadPreview: string; timestamp: number; retries: number; status: string }[];
+    count: number;
+    totalSize: number;
+    totalSizeFormatted: string;
+  }>({ items: [], count: 0, totalSize: 0, totalSizeFormatted: '0B' });
+  const [lastSyncTime, setLastSyncTime] = useState<string>('Never');
+  const [localAIStatus, setLocalAIStatus] = useState<LocalAIStatusType>({ isInitialized: false, isLoading: false, progress: 0, model: null, error: null });
+
+  // Subscribe to localAI status changes
+  useEffect(() => {
+    // Get initial status
+    setLocalAIStatus(localAI.getStatus());
+
+    // Subscribe to status updates
+    const unsubscribe = localAI.subscribe((status) => {
+      setLocalAIStatus(status);
+    });
+
+    // Auto-initialize local AI after a short delay
+    const initTimer = setTimeout(() => {
+      const currentStatus = localAI.getStatus();
+      if (!currentStatus.isInitialized && !currentStatus.isLoading) {
+        console.log('[App] Auto-initializing Local AI...');
+        localAI.initialize().catch(err => console.error('[App] Failed to initialize local AI:', err));
+      }
+    }, 2000);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(initTimer);
+    };
+  }, []);
 
   // Modal states
   const [showTeamModal, setShowTeamModal] = useState(false);
@@ -427,6 +456,23 @@ function DashboardContent() {
         if (res.ok) {
           const data = await res.json();
           setSyncStatus(data);
+          // Update last sync time
+          if (data.lastSync) {
+            const syncTime = new Date(data.lastSync);
+            const now = new Date();
+            const diff = Math.floor((now.getTime() - syncTime.getTime()) / 1000);
+            if (diff < 5) {
+              setLastSyncTime('Just now');
+            } else if (diff < 60) {
+              setLastSyncTime(`${diff}s ago`);
+            } else if (diff < 3600) {
+              setLastSyncTime(`${Math.floor(diff / 60)}m ago`);
+            } else {
+              setLastSyncTime(syncTime.toLocaleTimeString());
+            }
+          } else {
+            setLastSyncTime('Never');
+          }
         }
       } catch (error) {
         console.error('[Sync Status] Fetch error:', error);
@@ -436,6 +482,25 @@ function DashboardContent() {
     fetchSyncStatus();
     const syncInterval = setInterval(fetchSyncStatus, 5000);
     return () => clearInterval(syncInterval);
+  }, []);
+
+  // Poll for sync queue every 5 seconds
+  useEffect(() => {
+    const fetchSyncQueue = async () => {
+      try {
+        const res = await fetch('/api/sync/queue');
+        if (res.ok) {
+          const data = await res.json();
+          setSyncQueue(data);
+        }
+      } catch (error) {
+        console.error('[Sync Queue] Fetch error:', error);
+      }
+    };
+
+    fetchSyncQueue();
+    const queueInterval = setInterval(fetchSyncQueue, 5000);
+    return () => clearInterval(queueInterval);
   }, []);
 
   // Click outside handlers
@@ -1348,6 +1413,12 @@ function DashboardContent() {
           <span id="syncTxt">{isOnline ? 'Synced' : 'Offline'}</span>
         </div>
 
+        {/* Local AI Pill - Compact Status Indicator */}
+        <div className={`local-ai-pill ${localAIStatus.isInitialized ? 'online' : localAIStatus.isLoading ? 'loading' : 'offline'}`} id="localAIPill">
+          <span className="sdot"></span>
+          <span id="localAITxt">Local AI {localAIStatus.isInitialized ? 'Online' : localAIStatus.isLoading ? 'Loading' : 'Offline'}</span>
+        </div>
+
         <div className="hsep" style={{ marginRight: '16px' }}></div>
 
         {/* Header Metrics */}
@@ -1661,22 +1732,43 @@ function DashboardContent() {
               </div>
             </div>
             <div className="tl-body" id="tlBody">
-              {timeline.filter(t => !selectedIncident || t.incident_id === selectedIncident.id).map(event => (
-                <div key={event.id} className={`tl-ev ${event.type}`}>
-                  <div className="tl-dot" style={{
-                    background: event.agent === 'Triage-7' ? '#58a6ff' :
-                      event.agent === 'Remedy-3' ? '#bc8cff' :
-                        event.agent === 'Comms-1' ? '#d29922' :
-                          event.agent === 'PostMort-2' ? '#3fb950' :
-                            event.agent === 'You' ? '#f0f6fc' : '#8b949e'
-                  }}></div>
-                  <div className="tl-meta">
-                    <span className="tl-agent">{event.agent}</span>
-                    <span className="tl-time">{formatTime(event.timestamp)}</span>
+              {timeline.filter(t => !selectedIncident || t.incident_id === selectedIncident.id).map(event => {
+                const getAgentBadge = (agent: string) => {
+                  const badges: Record<string, { icon: React.ReactNode; color: string; bg: string; border: string }> = {
+                    'System': { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff7b72" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>, color: '#ff7b72', bg: 'rgba(255, 123, 114, 0.15)', border: 'rgba(255, 123, 114, 0.4)' },
+                    'Triage-7': { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)' },
+                    'Remedy-3': { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)', border: 'rgba(59, 130, 246, 0.4)' },
+                    'Comms-1': { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>, color: '#22c55e', bg: 'rgba(34, 197, 94, 0.15)', border: 'rgba(34, 197, 94, 0.4)' },
+                    'PostMort-2': { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>, color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)', border: 'rgba(168, 85, 247, 0.4)' },
+                    'You': { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f0f6fc" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>, color: '#f0f6fc', bg: 'rgba(240, 246, 252, 0.1)', border: 'rgba(240, 246, 252, 0.3)' },
+                  };
+                  return badges[agent] || { icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b949e" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>, color: '#8b949e', bg: 'rgba(139, 148, 158, 0.15)', border: 'rgba(139, 148, 158, 0.4)' };
+                };
+                const badge = getAgentBadge(event.agent);
+                const isWorking = agents.some(a => a.name === event.agent && a.status === 'working');
+                return (
+                  <div key={event.id} className={`tl-ev ${event.type}`}>
+                    <div className="tl-dot" style={{ background: badge.color }}></div>
+                    <div className="tl-meta">
+                      <span className="tl-agent" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 6px', borderRadius: '4px', background: badge.bg, color: badge.color, fontSize: '11px', fontWeight: '600', border: `1px solid ${badge.border}`, animation: isWorking ? 'pulse 1.5s infinite' : 'none' }}>
+                        {badge.icon} {event.agent}
+                        {isWorking && <span style={{ animation: 'spin 1s linear infinite', marginLeft: '2px' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg></span>}
+                      </span>
+                      <span className="tl-time">{formatTime(event.timestamp)}</span>
+                    </div>
+                    <div className="tl-msg">{event.message}</div>
+                    {event.agent === 'Remedy-3' && event.type === 'action' && (
+                      <div style={{ marginTop: '8px', padding: '10px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg> Action Required: Human-in-the-Loop</div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={() => setTimeline(prev => prev.map(e => e.id === event.id ? { ...e, approvalStatus: 'approved' as const } : e))} style={{ padding: '6px 12px', background: 'rgba(34, 197, 94, 0.2)', border: '1px solid rgba(34, 197, 94, 0.4)', borderRadius: '4px', color: '#22c55e', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}>✓ APPROVE</button>
+                          <button onClick={() => setTimeline(prev => prev.map(e => e.id === event.id ? { ...e, approvalStatus: 'rejected' as const } : e))} style={{ padding: '6px 12px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '4px', color: '#ef4444', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}>✕ REJECT</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="tl-msg">{event.message}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -1870,16 +1962,66 @@ function DashboardContent() {
               )}
               {activeTab === 'offline' && (
                 <div className="ws-offline">
-                  <div className="off-info">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" strokeWidth="2">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    <h4>Connected</h4>
-                    <p>All operations are syncing in real-time via PowerSync</p>
+                  {/* Sync Progress Header */}
+                  <div className="sync-progress-header">
+                    <div className="sync-status-row">
+                      <span className={`sync-status-dot ${syncStatus.connected ? 'connected' : 'offline'}`}></span>
+                      <span className="sync-status-text">
+                        {syncStatus.connected ? (syncStatus.status === 'syncing' ? 'Syncing...' : 'Connected') : 'Offline'}
+                      </span>
+                    </div>
+                    <div className="sync-queue-info">
+                      <span className="queue-count">{syncQueue.count} Action{syncQueue.count !== 1 ? 's' : ''} Pending Sync</span>
+                      {syncQueue.totalSize > 0 && (
+                        <span className="queue-size">{syncQueue.totalSizeFormatted} of local changes queued</span>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Pending Action Cards */}
                   <div className="off-queue">
-                    <div className="queue-header">Sync Queue</div>
-                    <div className="queue-empty">No pending operations</div>
+                    <div className="queue-header">Pending Actions</div>
+                    {syncQueue.items.length > 0 ? (
+                      <div className="queue-items">
+                        {syncQueue.items.slice(0, 10).map((item, idx) => (
+                          <div key={item.id || idx} className="queue-item-card" style={{ animationDelay: `${idx * 0.1}s` }}>
+                            <div className="queue-item-header">
+                              <span className={`source-badge ${item.source.toLowerCase().includes('triage') ? 'triage' : item.source.toLowerCase().includes('remedy') ? 'remedy' : item.source.toLowerCase().includes('comms') ? 'comms' : item.source.toLowerCase().includes('postmort') ? 'postmort' : 'user'}`}>
+                                {getAgentIcon(item.source)} {item.source}
+                              </span>
+                              <span className="queue-item-time">
+                                {new Date(item.timestamp).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            <div className="queue-item-body">
+                              <div className="action-type">
+                                <span className={`action-badge ${item.actionType.toLowerCase()}`}>
+                                  {item.actionType}
+                                </span>
+                                <span className="table-name">{item.table}</span>
+                              </div>
+                              <div className="payload-preview">{item.payloadPreview}</div>
+                            </div>
+                            <div className="queue-item-footer">
+                              <span className={`status-badge ${item.status === 'conflict' ? 'conflict' : 'pending'}`}>
+                                {item.status === 'conflict' ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg> Conflict</> : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" /></svg> Pending Sync</>}
+                              </span>
+                              {item.status === 'conflict' && (
+                                <button className="retry-btn">Retry</button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="queue-empty">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" strokeWidth="2">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        <p>All synced up!</p>
+                        <span>No pending operations</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -2057,40 +2199,74 @@ function DashboardContent() {
               </div>
             )}
             <div className="fhdr">
-              <span className="ldot" style={{ background: syncStatus.connected ? 'var(--ok)' : 'var(--er)' }}></span>
-              PowerSync Live {syncStatus.status === 'syncing' ? '(syncing...)' : ''}
-
+              <span className={`ldot ${syncStatus.connected ? '' : 'pulse-offline'}`} style={{ background: syncStatus.connected ? 'var(--ok)' : 'var(--er)' }}></span>
+              PowerSync Live {!syncStatus.connected ? '(Offline Mode)' : syncStatus.status === 'syncing' ? '(syncing...)' : ''}
             </div>
+
+            {/* Last Sync Timestamp */}
+            <div className="last-sync-timestamp">
+              Last Sync: {lastSyncTime}
+            </div>
+
+            {/* Recent Activity with Agent Specificity */}
+            <div className="recent-activity-section">
+              <div className="recent-activity-header">Recent Activity</div>
+              <div className="recent-activity-list">
+                {activities.length > 0 ? (
+                  activities.slice(0, 5).map((activity, idx) => {
+                    const agentBadge = getAgentBadge(activity.agent || 'Unknown');
+                    return (
+                      <div key={activity.id || idx} className="recent-activity-item">
+                        <span className="recent-agent-badge" style={{ background: agentBadge.bg, borderColor: agentBadge.border, color: agentBadge.color }}>
+                          {agentBadge.icon} {activity.agent || 'User'}
+                        </span>
+                        <span className="recent-action-text">
+                          {activity.action}: {activity.message.substring(0, 40)}{activity.message.length > 40 ? '...' : ''}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="recent-activity-empty">No recent activity</div>
+                )}
+              </div>
+            </div>
+
+            {/* Table Sync Status */}
             <div className="flist" id="flist">
               {syncStatus.tables && syncStatus.tables.length > 0 ? (
-                syncStatus.tables.map((table, idx) => (
-                  <div key={table.name || idx} className="fl-item">
-                    <span className="fl-dot" style={{ background: table.status === 'synced' ? 'var(--ok)' : 'var(--al)' }}></span>
-                    <span className="fl-msg">Synced {table.displayName} ({table.count} records)</span>
-                  </div>
-                ))
+                syncStatus.tables.map((table, idx) => {
+                  // Format display name properly
+                  const displayName = table.displayName?.toLowerCase().includes('incident') ? 'Incidents' :
+                    table.displayName?.toLowerCase().includes('timeline') ? 'Timeline' :
+                      table.displayName?.toLowerCase().includes('agent') ? 'Agents' :
+                        table.displayName || table.name;
+                  return (
+                    <div key={table.name || idx} className="fl-item synced-record-item">
+                      <span className="fl-dot" style={{ background: table.status === 'synced' ? 'var(--ok)' : 'var(--al)' }}></span>
+                      <span className="fl-msg"><span className="synced-label">Synced</span> {displayName} <span className="record-count">({table.count} {table.count === 1 ? 'record' : 'records'})</span></span>
+                    </div>
+                  );
+                })
               ) : (
                 <>
-                  <div className="fl-item">
+                  <div className="fl-item synced-record-item">
                     <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
-                    <span className="fl-msg">Synced incidents table</span>
+                    <span className="fl-msg"><span className="synced-label">Synced</span> Incidents <span className="record-count">(1 record)</span></span>
                   </div>
-                  <div className="fl-item">
+                  <div className="fl-item synced-record-item">
                     <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
-                    <span className="fl-msg">Synced timeline table</span>
+                    <span className="fl-msg"><span className="synced-label">Synced</span> Timeline <span className="record-count">(4 records)</span></span>
                   </div>
-                  <div className="fl-item">
+                  <div className="fl-item synced-record-item">
                     <span className="fl-dot" style={{ background: 'var(--ok)' }}></span>
-                    <span className="fl-msg">Synced agents table</span>
+                    <span className="fl-msg"><span className="synced-label">Synced</span> Agents <span className="record-count">(4 records)</span></span>
                   </div>
                 </>
               )}
             </div>
 
-            {/* Local AI Status - Below PowerSync Live */}
-            <div style={{ marginTop: 16 }}>
-              <LocalAIStatus />
-            </div>
+
           </div>
         </aside>
       </div>
@@ -2407,7 +2583,7 @@ function DashboardContent() {
               </ul>
             </div>
             <div style={{ marginBottom: '20px' }}>
-              <h4 style={{ color: 'var(--t0)', margin: '0 0 8px 0', fontSize: '14px' }}>⌨️ Keyboard Shortcuts</h4>
+              <h4 style={{ color: 'var(--t0)', margin: '0 0 8px 0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--t0)" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2" /><line x1="6" y1="8" x2="6" y2="8" /><line x1="10" y1="8" x2="10" y2="8" /><line x1="14" y1="8" x2="14" y2="8" /><line x1="18" y1="8" x2="18" y2="8" /><line x1="6" y1="12" x2="6" y2="12" /><line x1="10" y1="12" x2="10" y2="12" /><line x1="14" y1="12" x2="14" y2="12" /><line x1="18" y1="12" x2="18" y2="12" /><line x1="7" y1="16" x2="17" y2="16" /></svg> Keyboard Shortcuts</h4>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--bg2)', padding: '6px 10px', borderRadius: '4px' }}>
                   <span style={{ color: 'var(--t2)', fontSize: '11px' }}>New Incident</span>
@@ -4054,6 +4230,30 @@ function DashboardContent() {
       `}</style>
     </div>
   );
+}
+
+// Helper function to get agent icon for offline queue
+function getAgentIcon(source: string): React.ReactNode {
+  const lower = source.toLowerCase();
+  if (lower.includes('triage')) return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
+  if (lower.includes('remedy')) return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>;
+  if (lower.includes('comms')) return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>;
+  if (lower.includes('postmort')) return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>;
+  if (lower.includes('system')) return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff7b72" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>;
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b949e" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
+}
+
+// Helper function to get agent badge for recent activity
+function getAgentBadge(agent: string) {
+  const badges: Record<string, { icon: React.ReactNode; color: string; bg: string; border: string }> = {
+    'System': { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ff7b72" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>, color: '#ff7b72', bg: 'rgba(255, 123, 114, 0.15)', border: 'rgba(255, 123, 114, 0.4)' },
+    'Triage-7': { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.4)' },
+    'Remedy-3': { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>, color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)', border: 'rgba(59, 130, 246, 0.4)' },
+    'Comms-1': { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>, color: '#22c55e', bg: 'rgba(34, 197, 94, 0.15)', border: 'rgba(34, 197, 94, 0.4)' },
+    'PostMort-2': { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>, color: '#a855f7', bg: 'rgba(168, 85, 247, 0.15)', border: 'rgba(168, 85, 247, 0.4)' },
+    'You': { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f0f6fc" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>, color: '#f0f6fc', bg: 'rgba(240, 246, 252, 0.1)', border: 'rgba(240, 246, 252, 0.3)' },
+  };
+  return badges[agent] || { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8b949e" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>, color: '#8b949e', bg: 'rgba(139, 148, 158, 0.15)', border: 'rgba(139, 148, 158, 0.4)' };
 }
 
 /**

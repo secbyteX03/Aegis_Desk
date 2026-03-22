@@ -305,60 +305,9 @@ export default function AgentStatus({ variant = "floating", demoAgents }: AgentS
                         <span style={{ color: "var(--t3, #6e7681)", fontSize: "9px" }}>
                             Provider:
                         </span>
-                    </div>
-
-                    {/* Toggle Switch */}
-                    <div style={{
-                        display: "flex",
-                        gap: "4px",
-                        background: buttonBg,
-                        padding: "3px",
-                        borderRadius: "4px",
-                    }}>
-                        <button
-                            onClick={() => handleProviderSwitch("openai")}
-                            disabled={isSwitching}
-                            style={{
-                                flex: 1,
-                                padding: "4px 8px",
-                                border: "none",
-                                borderRadius: "3px",
-                                fontSize: "9px",
-                                cursor: selectedProvider === "openai" ? "default" : "pointer",
-                                background: selectedProvider === "openai"
-                                    ? "rgba(88, 166, 255, 0.3)"
-                                    : "transparent",
-                                color: selectedProvider === "openai"
-                                    ? "#58a6ff"
-                                    : "var(--t3, #6e7681)",
-                                transition: "all 0.2s ease",
-                                opacity: isSwitching ? 0.5 : 1,
-                            }}
-                        >
-                            🟢 OpenAI
-                        </button>
-                        <button
-                            onClick={() => handleProviderSwitch("gemini")}
-                            disabled={isSwitching}
-                            style={{
-                                flex: 1,
-                                padding: "4px 8px",
-                                border: "none",
-                                borderRadius: "3px",
-                                fontSize: "9px",
-                                cursor: selectedProvider === "gemini" ? "default" : "pointer",
-                                background: selectedProvider === "gemini"
-                                    ? "rgba(171, 119, 255, 0.3)"
-                                    : "transparent",
-                                color: selectedProvider === "gemini"
-                                    ? "#ab77ff"
-                                    : "var(--t3, #6e7681)",
-                                transition: "all 0.2s ease",
-                                opacity: isSwitching ? 0.5 : 1,
-                            }}
-                        >
-                            🔵 Gemini
-                        </button>
+                        <span style={{ color: "var(--t2, #8b949e)", fontSize: "9px" }}>
+                            Fixed
+                        </span>
                     </div>
                 </div>
             </div>

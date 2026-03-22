@@ -115,9 +115,39 @@ When production goes down, teams face chaos:
 ┌─────────────────────────┐   ┌─────────────────────────┐
 │    Neon PostgreSQL     │   │    Mastra AI            │
 │    (Serverless)        │   │    (AI Agents)          │
-│    + Neon Auth         │   │    + Gemini/Anthropic   │
+│    + Neon Auth         │   │    Orchestrator         │
 └─────────────────────────┘   └─────────────────────────┘
+                                 │
+         ┌──────────────────────┼──────────────────────┐
+         ▼                      ▼                      ▼
+┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+│    Groq        │   │  Google Gemini  │   │   Mistral AI   │
+│ (Llama 3.1 8B)│   │ (1.5 Pro)      │   │(mistral-small) │
+└─────────────────┘   └─────────────────┘   └─────────────────┘
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │    WebLLM       │
+                        │   (Local/GPU)   │
+                        └─────────────────┘
 ```
+
+### 🤖 Multi-Provider AI Agents (100% Free - No Credit Card Required)
+
+AegisDesk uses **Mastra** as an AI orchestration layer to coordinate multiple free LLM providers:
+
+| Agent | Provider | Model | Why it fits the "No Money" rule |
+|-------|----------|-------|--------------------------------|
+| **Triage-7** | Groq | Llama 3.1 8B | Free for experimentation with high rate limits |
+| **Remedy-3** | Google Gemini | 1.5 Pro | Free tier with generous RPM/TPM |
+| **PostMort-2** | Mistral AI | mistral-small-latest | Free "Experiment" plan - phone verification only, no credit card |
+| **Comms-1** | WebLLM | (local GPU) | Runs locally in browser, zero quotas |
+
+**How Mastra orchestrates the agents:**
+1. **Unified Model Interface** - Mastra provides a standard way to define agents regardless of the backend
+2. **Workflow Orchestration** - Triggers agents in a chain (Triage → Remedy → Comms → PostMort)
+3. **Human-in-the-Loop** - Supports suspending workflows for human approval
+4. **Tool Integration** - Agents can use tools to write to timeline, synced via PowerSync to Neon
 
 ## 📋 Prerequisites
 
@@ -142,6 +172,9 @@ cd aegisdesk
 
 # Install all dependencies
 npm install
+
+# Install additional AI provider packages (for multi-provider setup)
+npm install @ai-sdk/groq @ai-sdk/mistral
 ```
 
 The following npm packages are installed:
@@ -152,9 +185,10 @@ The following npm packages are installed:
 - `react` (19.2.3) & `react-dom` (19.2.3) - UI library
 - `@powersync/react` & `@powersync/web` - Local database sync
 - `@neondatabase/serverless` - Neon PostgreSQL driver
-- `@mastra/core` - AI agent framework
-- `@ai-sdk/openai` - OpenAI provider (GPT-4o)
+- `@mastra/core` - AI agent framework (orchestration layer)
 - `@ai-sdk/google` - Google/Gemini provider
+- `@ai-sdk/groq` - Groq provider (for Triage-7 agent)
+- `@ai-sdk/mistral` - Mistral AI provider (for PostMort-2 agent)
 - `@google/generative-ai` - Gemini AI
 - `@tanstack/react-query` - Data fetching
 - `ai` - AI SDK
@@ -181,17 +215,25 @@ VITE_POWERSYNC_INSTANCE_ID=your-powersync-instance-id
 VITE_POWERSYNC_API_KEY=your-powersync-api-key
 POWERSYNC_URL=https://sync.powersync.com
 
-# AI Configuration (Mastra uses OpenAI and Gemini)
-# OpenAI (primary - used by most agents)
-OPENAI_API_KEY=your-openai-api-key
+# AI Configuration (Multi-Provider Setup - 100% Free)
+# Groq API Key - Get free key at https://console.groq.com (for Triage-7 agent)
+GROQ_API_KEY=your-groq-api-key
 
-# Gemini (optional - used by some agents)
-GEMINI_API_KEY=your-gemini-api-key
+# Google Gemini API Key - Get free key at https://aistudio.google.com/app/apikey (for Remedy-3 agent)
+GOOGLE_GENERATIVE_AI_API_KEY=your-gemini-api-key
+
+# Mistral AI API Key - Get free "Experiment" key at https://console.mistral.ai (for PostMort-2 agent)
+MISTRAL_API_KEY=your-mistral-api-key
 
 # Application
 NODE_ENV=development
 PORT=3000
 ```
+
+> **Note:** All three AI providers offer free tiers that don't require a credit card:
+> - **Groq**: Free for experimentation with high rate limits
+> - **Google Gemini**: Free tier with generous RPM/TPM
+> - **Mistral AI**: Free "Experiment" plan - only requires phone verification
 
 ### 3. Database Setup
 

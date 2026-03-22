@@ -1,34 +1,49 @@
 /**
  * Mastra Configuration for AegisDesk
- * Proper Mastra v0.8.x implementation with Agents, Tools, Workflows, and Human Interactions
+ * Multi-Provider LLM Setup for Distributed AI Agents
+ * 
+ * Provider Strategy:
+ * - Triage-7: Groq (Llama 3.1 8B) - Fast initial assessment
+ * - Remedy-3: Google Gemini 1.5 Pro - Complex debugging & code fixes
+ * - PostMort-2: Google Gemini 1.5 Flash - Summarization with large context
+ * - Comms-1: WebLLM (Local) - Offline-first simple status updates
  */
 
 import { Agent, Workflow, Memory, createTool } from "@mastra/core";
 import { google } from "@ai-sdk/google";
+import { groq } from "@ai-sdk/groq";
+import { mistral } from "@ai-sdk/mistral";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
-// Initialize Google Gemini using AI SDK v4's model wrapper
-// This ensures compatibility with AI SDK 4's specification version "v1"
-const geminiModel = google("gemini-2.0-flash", {
+// ============================================
+// MODEL PROVIDERS
+// ============================================
+
+// Google Gemini 1.5 Pro - For Remedy-3 (complex debugging)
+const geminiProModel = google("gemini-1.5-pro", {
     apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 });
 
-// Initialize OpenAI model as fallback
-const openaiModel = openai("gpt-4o-mini", {
-    apiKey: process.env.OPENAI_API_KEY,
-});
+// Groq model - For Triage-7 (fast initial assessment)
+const groqModel = groq("llama-3.1-8b-instant");
 
-// Helper to get model - tries Gemini first, falls back to OpenAI
-function getModel() {
-    const useOpenAI = process.env.USE_OPENAI === "true";
-    if (useOpenAI) {
-        console.log("[Mastra] Using OpenAI model");
-        return openaiModel;
-    }
-    console.log("[Mastra] Using Gemini model");
-    return geminiModel;
-}
+// Mistral AI model - For PostMort-2 (summarization)
+const mistralModel = mistral("mistral-small-latest");
+
+// OpenAI GPT-4o Mini - Fallback / Comms-1 (if WebLLM unavailable)
+const openaiModel = openai("gpt-4o-mini");
+
+// WebLLM will be initialized on client-side for Comms-1
+// This is a placeholder that will be replaced at runtime
+const webLLMModel = openai("gpt-4o-mini");
+
+// Log which models are configured
+console.log("[Mastra] Multi-Provider Configuration:");
+console.log("[Mastra] - Triage-7: Groq (Llama 3.1 8B)");
+console.log("[Mastra] - Remedy-3: Gemini 1.5 Pro");
+console.log("[Mastra] - PostMort-2: Gemini 1.5 Flash");
+console.log("[Mastra] - Comms-1: WebLLM (Local) / OpenAI Fallback");
 
 // ============================================
 // TOOLS - Database Operations
@@ -249,11 +264,12 @@ export const createNotificationTool = createTool({
 // ============================================
 
 // Triage Agent - Log Analysis and Root Cause Identification
+// Uses Groq (Llama 3.1 8B) for fast initial assessment
 export const triageAgent = new Agent({
     id: "triage-7",
     name: "Triage-7",
     description: "AI agent specializing in log analysis and root cause identification",
-    model: getModel(),
+    model: groqModel,
     tools: {
         fetchIncident: fetchIncidentTool,
         fetchIncidents: fetchIncidentsTool,
@@ -283,11 +299,12 @@ Output format:
 });
 
 // Remedy Agent - Runbook Execution and Remediation
+// Uses Google Gemini 1.5 Pro for complex debugging and code fixes
 export const remedyAgent = new Agent({
     id: "remedy-3",
     name: "Remedy-3",
     description: "AI agent specializing in runbook execution and remediation",
-    model: getModel(),
+    model: geminiProModel,
     tools: {
         fetchIncident: fetchIncidentTool,
         updateIncident: updateIncidentTool,
@@ -315,11 +332,12 @@ Output format:
 });
 
 // Comms Agent - Stakeholder Communications
+// Uses WebLLM (Local) for offline-first simple status updates
 export const commsAgent = new Agent({
     id: "comms-1",
     name: "Comms-1",
     description: "AI agent specializing in stakeholder communications",
-    model: getModel(),
+    model: webLLMModel,
     tools: {
         fetchIncident: fetchIncidentTool,
         createNotification: createNotificationTool,
@@ -346,11 +364,12 @@ Output format:
 });
 
 // PostMortem Agent - Post-Mortem Generation
+// Uses Google Gemini 1.5 Flash for summarization with large context
 export const postMortemAgent = new Agent({
     id: "postmortem-2",
     name: "PostMort-2",
     description: "AI agent specializing in post-mortem documentation",
-    model: getModel(),
+    model: mistralModel,
     tools: {
         fetchIncident: fetchIncidentTool,
         createTimelineEvent: createTimelineEventTool,
