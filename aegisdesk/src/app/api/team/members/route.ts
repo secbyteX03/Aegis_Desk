@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/neon/client";
+import { NeonAuth } from "@/lib/neon-auth";
 
 /**
  * Neon database client is used for all queries
@@ -20,94 +21,92 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Decode the token
-    try {
-      const tokenPayload = JSON.parse(
-        Buffer.from(authHeader.replace("Bearer ", ""), "base64").toString()
-      );
-      const userId = tokenPayload.userId;
+    // Verify token using NeonAuth
+    const token = authHeader.replace("Bearer ", "");
+    const authResult = await NeonAuth.verifyToken(token);
 
-      if (!userId) {
-        return NextResponse.json(
-          { error: "Invalid token" },
-          { status: 401 }
-        );
-      }
-
-      // Get user's organization from profile
-      const profileResult = await sql`
-        SELECT org FROM profiles WHERE id = ${userId}
-      `;
-      const profile = profileResult[0];
-
-      if (!profile?.org) {
-        return NextResponse.json(
-          { error: "You are not part of any organization" },
-          { status: 400 }
-        );
-      }
-
-      // Validate that org is a valid UUID (not a legacy string like "My Team")
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(profile.org)) {
-        return NextResponse.json(
-          { error: "Invalid organization configuration. Please contact support." },
-          { status: 400 }
-        );
-      }
-
-      // Get all team members from team_members table
-      const membersResult = await sql`
-        SELECT * FROM team_members 
-        WHERE organization_id = ${profile.org} 
-        AND status IN ('active', 'confirmed')
-        ORDER BY created_at ASC
-      `;
-
-      const members = membersResult as unknown as Array<{
-        id: string;
-        user_id: string;
-        organization_id: string;
-        role: string;
-        status: string;
-        invited_by: string | null;
-        created_at: Date;
-      }>;
-
-      // Add "isCurrentUser" flag to each member
-      const membersWithFlag = (members || []).map((member: any) => ({
-        ...member,
-        isCurrentUser: member.user_id === userId,
-      }));
-
-      // Also get pending invitations
-      const invitationsResult = await sql`
-        SELECT * FROM team_invitations 
-        WHERE organization_id = ${profile.org} 
-        AND status = 'pending'
-        ORDER BY created_at ASC
-      `;
-
-      const invitations = invitationsResult as unknown as Array<{
-        id: string;
-        email: string;
-        organization_id: string;
-        status: string;
-        created_at: Date;
-      }>;
-
-      return NextResponse.json({
-        members: membersWithFlag,
-        pendingInvitations: invitations || [],
-        currentUserId: userId,
-      });
-    } catch (e) {
-      console.error("[Team Members] Token decode error:", e);
+    if (!authResult.success) {
       return NextResponse.json(
-        { error: "Invalid token format" },
+        { error: "Invalid token" },
         { status: 401 }
       );
     }
+
+    const userId = authResult.user?.id;
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Invalid user" },
+        { status: 401 }
+      );
+    }
+
+    // Get user's organization from profile
+    const profileResult = await sql`
+      SELECT organization_id FROM profiles WHERE id = ${userId}
+    `;
+    const profile = profileResult[0] as any;
+
+    if (!profile?.organization_id) {
+      return NextResponse.json(
+        { error: "You are not part of any organization" },
+        { status: 400 }
+      );
+    }
+
+    // Validate that organization_id is a valid UUID (not a legacy string like "My Team")
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(profile.organization_id)) {
+      return NextResponse.json(
+        { error: "Invalid organization configuration. Please contact support." },
+        { status: 400 }
+      );
+    }
+
+    // Get all team members from team_members table
+    const membersResult = await sql`
+      SELECT * FROM team_members 
+      WHERE organization_id = ${profile.organization_id} 
+      AND status IN ('active', 'confirmed')
+      ORDER BY created_at ASC
+    `;
+
+    const members = membersResult as unknown as Array<{
+      id: string;
+      user_id: string;
+      organization_id: string;
+      role: string;
+      status: string;
+      invited_by: string | null;
+      created_at: Date;
+    }>;
+
+    // Add "isCurrentUser" flag to each member
+    const membersWithFlag = (members || []).map((member: any) => ({
+      ...member,
+      isCurrentUser: member.user_id === userId,
+    }));
+
+    // Also get pending invitations
+    const invitationsResult = await sql`
+      SELECT * FROM team_invitations 
+      WHERE organization_id = ${profile.organization_id} 
+      AND status = 'pending'
+      ORDER BY created_at ASC
+    `;
+
+    const invitations = invitationsResult as unknown as Array<{
+      id: string;
+      email: string;
+      organization_id: string;
+      status: string;
+      created_at: Date;
+    }>;
+
+    return NextResponse.json({
+      members: membersWithFlag,
+      pendingInvitations: invitations || [],
+      currentUserId: userId,
+    });
   } catch (error) {
     console.error("[Team Members] Error:", error);
     return NextResponse.json(
@@ -132,111 +131,109 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Decode the token
-    try {
-      const tokenPayload = JSON.parse(
-        Buffer.from(authHeader.replace("Bearer ", ""), "base64").toString()
-      );
-      const userId = tokenPayload.userId;
+    // Verify token using NeonAuth
+    const token = authHeader.replace("Bearer ", "");
+    const authResult = await NeonAuth.verifyToken(token);
 
-      if (!userId) {
-        return NextResponse.json(
-          { error: "Invalid token" },
-          { status: 401 }
-        );
-      }
-
-      const body = await request.json();
-      const { memberId } = body;
-
-      if (!memberId) {
-        return NextResponse.json(
-          { error: "Member ID is required" },
-          { status: 400 }
-        );
-      }
-
-      // Get user's organization from profile
-      const profileResult = await sql`
-        SELECT org FROM profiles WHERE id = ${userId}
-      `;
-      const profile = profileResult[0];
-
-      if (!profile?.org) {
-        return NextResponse.json(
-          { error: "You are not part of any organization" },
-          { status: 400 }
-        );
-      }
-
-      // Get the member to be deleted
-      const memberResult = await sql`
-        SELECT * FROM team_members 
-        WHERE id = ${memberId} 
-        AND organization_id = ${profile.org}
-        AND status IN ('active', 'confirmed')
-      `;
-      const member = memberResult[0] as any;
-
-      if (!member) {
-        console.log("[Team Delete] Member not found. ID:", memberId, "Org:", profile.org);
-        return NextResponse.json(
-          { error: "Member not found" },
-          { status: 404 }
-        );
-      }
-
-      // Get user's role to check permissions
-      const currentUserResult = await sql`
-        SELECT role, organization_id FROM team_members 
-        WHERE user_id = ${userId}
-        AND status IN ('active', 'confirmed')
-        LIMIT 1
-      `;
-      const currentUserMember = currentUserResult[0] as any;
-
-      // Check if user is owner of the organization
-      const orgResult = await sql`
-        SELECT owner_id FROM organizations WHERE id = ${member.organization_id}
-      `;
-      const organization = orgResult[0] as any;
-
-      const isOrgOwner = organization?.owner_id === userId;
-      const isInviter = member.invited_by === userId;
-      const isCurrentUserMember = currentUserMember?.role === "Owner" || currentUserMember?.role === "Admin";
-
-      // Allow deletion if user is org owner, the inviter, or has Admin role
-      if (!isOrgOwner && !isInviter && !isCurrentUserMember) {
-        return NextResponse.json(
-          { error: "You don't have permission to remove this team member" },
-          { status: 403 }
-        );
-      }
-
-      // Don't allow deleting yourself
-      if (member.user_id === userId) {
-        return NextResponse.json(
-          { error: "You cannot remove yourself from the team" },
-          { status: 400 }
-        );
-      }
-
-      // Delete the member
-      await sql`
-        DELETE FROM team_members WHERE id = ${memberId}
-      `;
-
-      return NextResponse.json({
-        success: true,
-        message: "Team member removed successfully",
-      });
-    } catch (e) {
-      console.error("[Team Delete] Token decode error:", e);
+    if (!authResult.success) {
       return NextResponse.json(
-        { error: "Invalid token format" },
+        { error: "Invalid token" },
         { status: 401 }
       );
     }
+
+    const userId = authResult.user?.id;
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Invalid user" },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const { memberId } = body;
+
+    if (!memberId) {
+      return NextResponse.json(
+        { error: "Member ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Get user's organization from profile
+    const profileResult = await sql`
+      SELECT organization_id FROM profiles WHERE id = ${userId}
+    `;
+    const profile = profileResult[0] as any;
+
+    if (!profile?.organization_id) {
+      return NextResponse.json(
+        { error: "You are not part of any organization" },
+        { status: 400 }
+      );
+    }
+
+    // Get the member to be deleted
+    const memberResult = await sql`
+      SELECT * FROM team_members 
+      WHERE id = ${memberId} 
+      AND organization_id = ${profile.organization_id}
+      AND status IN ('active', 'confirmed')
+    `;
+    const member = memberResult[0] as any;
+
+    if (!member) {
+      console.log("[Team Delete] Member not found. ID:", memberId, "Org:", profile.organization_id);
+      return NextResponse.json(
+        { error: "Member not found" },
+        { status: 404 }
+      );
+    }
+
+    // Get user's role to check permissions
+    const currentUserResult = await sql`
+      SELECT role, organization_id FROM team_members 
+      WHERE user_id = ${userId}
+      AND status IN ('active', 'confirmed')
+      LIMIT 1
+    `;
+    const currentUserMember = currentUserResult[0] as any;
+
+    // Check if user is owner of the organization
+    const orgResult = await sql`
+      SELECT owner_id FROM organizations WHERE id = ${member.organization_id}
+    `;
+    const organization = orgResult[0] as any;
+
+    const isOrgOwner = organization?.owner_id === userId;
+    const isInviter = member.invited_by === userId;
+    const isCurrentUserMember = currentUserMember?.role === "Owner" || currentUserMember?.role === "Admin";
+
+    // Allow deletion if user is org owner, the inviter, or has Admin role
+    if (!isOrgOwner && !isInviter && !isCurrentUserMember) {
+      return NextResponse.json(
+        { error: "You don't have permission to remove this team member" },
+        { status: 403 }
+      );
+    }
+
+    // Don't allow deleting yourself
+    if (member.user_id === userId) {
+      return NextResponse.json(
+        { error: "You cannot remove yourself from the team" },
+        { status: 400 }
+      );
+    }
+
+    // Delete the member
+    await sql`
+      DELETE FROM team_members WHERE id = ${memberId}
+    `;
+
+    return NextResponse.json({
+      success: true,
+      message: "Team member removed successfully",
+    });
   } catch (error) {
     console.error("[Team Delete] Error:", error);
     return NextResponse.json(
