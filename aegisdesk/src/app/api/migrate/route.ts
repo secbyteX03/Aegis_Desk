@@ -47,6 +47,54 @@ export async function GET(request: NextRequest) {
         {
             name: "Add organization_id to timeline_events",
             sql: `ALTER TABLE timeline_events ADD COLUMN IF NOT EXISTS organization_id TEXT`
+        },
+        {
+            name: "Add name to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS name TEXT`
+        },
+        {
+            name: "Add user_id to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS user_id TEXT`
+        },
+        {
+            name: "Add organization_id to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS organization_id TEXT`
+        },
+        {
+            name: "Add status to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'`
+        },
+        {
+            name: "Add joined_at to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP WITH TIME ZONE`
+        },
+        {
+            name: "Add full_name to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS full_name TEXT`
+        },
+        {
+            name: "Add role to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member'`
+        },
+        {
+            name: "Add invited_by to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS invited_by TEXT`
+        },
+        {
+            name: "Add invited_at to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS invited_at TIMESTAMP WITH TIME ZONE`
+        },
+        {
+            name: "Add confirmed_at to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP WITH TIME ZONE`
+        },
+        {
+            name: "Add created_at to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()`
+        },
+        {
+            name: "Add updated_at to team_members",
+            sql: `ALTER TABLE team_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()`
         }
     ];
 
