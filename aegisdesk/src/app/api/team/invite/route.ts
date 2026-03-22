@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { NeonAuth } from "@/lib/neon-auth";
-import { neon } from "@neondatabase/serverless";
+import { sql } from "@/lib/neon/client";
 import { randomBytes } from "crypto";
 import { Resend } from "resend";
 
-const DATABASE_URL = process.env.DATABASE_URL;
-
-if (!DATABASE_URL) {
-  throw new Error("DATABASE_URL not configured");
-}
-
-const sql = neon(DATABASE_URL);
+// Note: Database availability is handled through hybrid-db fallback
+// No need for explicit Neon configuration check here
 
 // Initialize Resend for sending emails
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -94,8 +89,8 @@ export async function POST(request: NextRequest) {
       if (teamMembers.length === 0) {
         console.log("[Team Invite] Adding inviter to team_members table");
         await sql`
-          INSERT INTO team_members (id, user_id, organization_id, email, full_name, role, status, joined_at, created_at, updated_at)
-          VALUES (${generateUUID()}, ${userId}, ${orgId}, ${profiles[0]?.email || ""}, ${profiles[0]?.full_name || "User"}, ${"Owner"}, ${"active"}, ${new Date().toISOString()}, ${new Date().toISOString()}, ${new Date().toISOString()})
+          INSERT INTO team_members (id, user_id, organization_id, email, name, full_name, role, status, joined_at, created_at, updated_at)
+          VALUES (${generateUUID()}, ${userId}, ${orgId}, ${profiles[0]?.email || ""}, ${profiles[0]?.full_name || "User"}, ${profiles[0]?.full_name || "User"}, ${"Owner"}, ${"active"}, ${new Date().toISOString()}, ${new Date().toISOString()}, ${new Date().toISOString()})
         `;
       }
     } else {
@@ -112,8 +107,8 @@ export async function POST(request: NextRequest) {
       await sql`UPDATE profiles SET organization_id = ${orgId} WHERE id = ${userId}`;
       // Add user as team member
       await sql`
-        INSERT INTO team_members (id, user_id, organization_id, email, full_name, role, status, joined_at, created_at, updated_at)
-        VALUES (${generateUUID()}, ${userId}, ${orgId}, ${profiles[0]?.email || ""}, ${profiles[0]?.full_name || "User"}, ${"Owner"}, ${"active"}, ${new Date().toISOString()}, ${new Date().toISOString()}, ${new Date().toISOString()})
+        INSERT INTO team_members (id, user_id, organization_id, email, name, full_name, role, status, joined_at, created_at, updated_at)
+        VALUES (${generateUUID()}, ${userId}, ${orgId}, ${profiles[0]?.email || ""}, ${profiles[0]?.full_name || "User"}, ${profiles[0]?.full_name || "User"}, ${"Owner"}, ${"active"}, ${new Date().toISOString()}, ${new Date().toISOString()}, ${new Date().toISOString()})
       `;
     }
 
@@ -216,8 +211,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("[Team Invite] Error:", error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: "Failed to send invitation" },
+      { error: "Failed to send invitation: " + errorMessage },
       { status: 500 }
     );
   }
