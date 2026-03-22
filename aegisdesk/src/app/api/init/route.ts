@@ -38,6 +38,34 @@ export async function POST(request: Request) {
     const existingTimeline = await sql`SELECT COUNT(*) as count FROM timeline_events`;
     const existingAgents = await sql`SELECT COUNT(*) as count FROM agents`;
 
+    // Check if team_invitations table exists, if not create it
+    try {
+      await sql`SELECT 1 FROM team_invitations LIMIT 1`;
+    } catch {
+      console.log("[Init] Creating team_invitations table...");
+      await sql`CREATE TABLE IF NOT EXISTS team_invitations (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        role TEXT DEFAULT 'member',
+        invited_by TEXT NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'pending',
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`;
+      console.log("[Init] team_invitations table created");
+    }
+
+    // Add data column to notifications table if it doesn't exist
+    try {
+      await sql`ALTER TABLE notifications ADD COLUMN data TEXT`;
+      console.log("[Init] Added data column to notifications table");
+    } catch (e) {
+      // Column may already exist, ignore error
+      console.log("[Init] notifications data column check: already exists or other error");
+    }
+
     const incidentCount = Number(existingIncidents[0]?.count || 0);
     const timelineCount = Number(existingTimeline[0]?.count || 0);
     const agentCount = Number(existingAgents[0]?.count || 0);
@@ -88,6 +116,19 @@ export async function POST(request: Request) {
         last_heartbeat TIMESTAMP WITH TIME ZONE,
         capabilities TEXT,
         organization_id TEXT
+      )`;
+
+      // Create team_invitations table
+      await sql`CREATE TABLE IF NOT EXISTS team_invitations (
+        id TEXT PRIMARY KEY,
+        organization_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        role TEXT DEFAULT 'member',
+        invited_by TEXT NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'pending',
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )`;
 
       console.log("[Init] Tables created successfully");
