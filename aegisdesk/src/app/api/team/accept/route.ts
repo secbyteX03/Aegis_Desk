@@ -1,10 +1,73 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/neon/client";
+import { NeonAuth } from "@/lib/neon-auth";
 import { randomBytes } from "crypto";
 
 /**
  * Neon database client is used for all queries
  */
+
+/**
+ * GET /api/team/accept
+ * Verify an invitation token (used by invite page)
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const token = searchParams.get("token");
+
+    if (!token) {
+      return NextResponse.json(
+        { valid: false, error: "Invitation token is required" },
+        { status: 400 }
+      );
+    }
+
+    // Find the invitation using Neon SQL
+    const invitationResult = await sql`
+      SELECT * FROM team_invitations 
+      WHERE token = ${token} AND status = 'pending'
+    `;
+    const invitation = invitationResult[0] as any;
+
+    if (!invitation) {
+      return NextResponse.json(
+        { valid: false, error: "Invalid or expired invitation" },
+        { status: 404 }
+      );
+    }
+
+    // Check if invitation has expired
+    if (new Date(invitation.expires_at) < new Date()) {
+      return NextResponse.json(
+        { valid: false, error: "This invitation has expired" },
+        { status: 400 }
+      );
+    }
+
+    // Get organization name
+    const orgResult = await sql`
+      SELECT name FROM organizations WHERE id = ${invitation.organization_id}
+    `;
+    const organization = orgResult[0] as any;
+
+    return NextResponse.json({
+      valid: true,
+      invitation: {
+        email: invitation.email,
+        role: invitation.role,
+        organizationName: organization?.name || "Unknown Organization",
+        expiresAt: invitation.expires_at,
+      },
+    });
+  } catch (error) {
+    console.error("[Team Accept] GET Error:", error);
+    return NextResponse.json(
+      { valid: false, error: "Failed to verify invitation" },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * POST /api/team/accept
@@ -53,23 +116,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Decode the token
-    let userId: string;
-    try {
-      const tokenPayload = JSON.parse(
-        Buffer.from(authHeader.replace("Bearer ", ""), "base64").toString()
-      );
-      userId = tokenPayload.userId;
+    // Verify the auth token using NeonAuth
+    const authToken = authHeader.replace("Bearer ", "");
+    const authResult = await NeonAuth.verifyToken(authToken);
 
-      if (!userId) {
-        return NextResponse.json(
-          { error: "Invalid authentication token" },
-          { status: 401 }
-        );
-      }
-    } catch (e) {
+    if (!authResult.success) {
       return NextResponse.json(
-        { error: "Invalid token format" },
+        { error: "Invalid token" },
+        { status: 401 }
+      );
+    }
+
+    const userId = authResult.user?.id;
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Invalid user" },
         { status: 401 }
       );
     }
@@ -99,10 +160,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Add user to the organization as a member
+    // Add user to the organization as a member (include all required fields)
+    const memberId = randomBytes(16).toString("hex");
     await sql`
-      INSERT INTO team_members (user_id, organization_id, role, status, invited_by)
-      VALUES (${userId}, ${invitation.organization_id}, 'Member', 'active', ${invitation.invited_by})
+      INSERT INTO team_members (id, user_id, organization_id, email, name, full_name, role, status, invited_by, joined_at, created_at, updated_at)
+      VALUES (${memberId}, ${userId}, ${invitation.organization_id}, ${profile.email}, ${profile.full_name || 'User'}, ${profile.full_name || 'User'}, ${invitation.role || 'Member'}, 'active', ${invitation.invited_by}, ${new Date().toISOString()}, ${new Date().toISOString()}, ${new Date().toISOString()})
     `;
 
     // Update the invitation status
@@ -112,7 +174,7 @@ export async function POST(request: NextRequest) {
 
     // Update user profile with organization
     await sql`
-      UPDATE profiles SET org = ${invitation.organization_id} WHERE id = ${userId}
+      UPDATE profiles SET organization_id = ${invitation.organization_id} WHERE id = ${userId}
     `;
 
     // Get organization name
