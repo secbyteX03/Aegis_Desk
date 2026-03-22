@@ -359,9 +359,23 @@ async function clientUnsafe(query: string, params: unknown[] = []): Promise<unkn
         throw new Error("Neon client not available");
     }
 
-    // Simple query execution - in production you'd want proper parameterized queries
-    const result = await client(query, ...params);
-    return result as unknown[];
+    try {
+        // Use Neon client with the (string, params[]) overload
+        // This avoids the template literal parsing issues
+        const result = await (client as (str: string, params?: unknown[]) => Promise<{ rows: unknown[] }>)(query, params);
+
+        // Neon client returns result with rows property - extract rows for queries
+        // If result has rows (SELECT query), return rows array
+        if (result && typeof result === 'object' && 'rows' in result) {
+            return (result as { rows: unknown[] }).rows;
+        }
+
+        // For non-SELECT queries or other results, return as array
+        return result as unknown[];
+    } catch (error) {
+        console.error("[HybridDB] Neon query error:", error);
+        throw error;
+    }
 }
 
 /**
@@ -480,10 +494,9 @@ export async function hybridUpdate<T = unknown>(
                     .map((key, i) => `${key} = $${i + 2}`)
                     .join(", ");
 
-                const result = await client(
+                const result = await (client as (str: string, params?: unknown[]) => Promise<any>)(
                     `UPDATE ${table} SET ${setClause} WHERE id = $1 RETURNING *`,
-                    id,
-                    ...Object.values(updateData)
+                    [id, ...Object.values(updateData)]
                 );
 
                 console.log(`[HybridDB] Updated in Neon: ${table}/${id}`);
@@ -541,7 +554,7 @@ export async function hybridDelete(
         try {
             const client = getNeonClient();
             if (client) {
-                await client(`DELETE FROM ${table} WHERE id = $1`, id);
+                await (client as (str: string, params?: unknown[]) => Promise<any>)(`DELETE FROM ${table} WHERE id = $1`, [id]);
 
                 console.log(`[HybridDB] Deleted from Neon: ${table}/${id}`);
 
@@ -629,9 +642,9 @@ export async function processSyncQueue(): Promise<{
                 const columns = Object.keys(item.data).join(", ");
                 const placeholders = Object.keys(item.data).map((_, i) => `$${i + 1}`).join(", ");
 
-                await client(
+                await (client as (str: string, params?: unknown[]) => Promise<any>)(
                     `INSERT INTO ${item.table} (${columns}) VALUES (${placeholders}) ON CONFLICT (id) DO UPDATE SET ${Object.keys(item.data).map(key => `${key} = EXCLUDED.${key}`).join(", ")}`,
-                    ...Object.values(item.data)
+                    Object.values(item.data)
                 );
             } else if (item.operation === "UPDATE") {
                 const { id, ...updateData } = item.data;
@@ -639,13 +652,12 @@ export async function processSyncQueue(): Promise<{
                     .map((key, i) => `${key} = $${i + 2}`)
                     .join(", ");
 
-                await client(
+                await (client as (str: string, params?: unknown[]) => Promise<any>)(
                     `UPDATE ${item.table} SET ${setClause}, updated_at = NOW() WHERE id = $1`,
-                    id,
-                    ...Object.values(updateData)
+                    [id, ...Object.values(updateData)]
                 );
             } else if (item.operation === "DELETE") {
-                await client(`DELETE FROM ${item.table} WHERE id = $1`, item.data.id);
+                await (client as (str: string, params?: unknown[]) => Promise<any>)(`DELETE FROM ${item.table} WHERE id = $1`, [item.data.id]);
             }
 
             removeFromSyncQueue(item.id);
