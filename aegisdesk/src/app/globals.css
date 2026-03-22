@@ -2332,7 +2332,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  background: rgba(88, 166, 255, 0.05);
+  background: var(--bg1);
   border-radius: 6px;
   border: 1px solid var(--bd);
 }
@@ -2814,46 +2814,47 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px;
+  padding: 40px 24px;
   color: var(--t2);
   text-align: center;
+  min-height: 150px;
 }
 
 .queue-empty svg {
-  margin-bottom: 12px;
-  opacity: 0.6;
+  margin-bottom: 16px;
+  opacity: 0.8;
+  width: 48px;
+  height: 48px;
 }
 
 .queue-empty p {
-  font-size: 14px;
-  font-weight: 500;
-  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px;
   color: var(--ok);
 }
 
 .queue-empty span {
-  font-size: 12px;
-  opacity: 0.7;
+  font-size: 13px;
+  opacity: 0.8;
 }
 
 /* Terminal-style PowerSync Live Section */
 .powersync-terminal {
-  background: #0a0a0a !important;
-  font-family: 'Courier New', Courier, monospace !important;
+  background: var(--bg0) !important;
+  font-family: var(--fm) !important;
 }
 
 .powersync-terminal .fhdr {
-  background: #001100 !important;
-  color: #00ff00 !important;
-  text-shadow: 0 0 5px #00ff00 !important;
+  background: var(--bg1) !important;
+  color: var(--t0) !important;
 }
 
 .powersync-terminal .last-sync-timestamp {
-  color: #00ff00 !important;
-  font-family: 'Courier New', Courier, monospace !important;
+  color: var(--t2) !important;
+  font-family: var(--fm) !important;
   font-size: 11px !important;
-  text-shadow: 0 0 3px #00ff00 !important;
-  background: #001100 !important;
+  background: var(--bg1) !important;
 }
 
 .powersync-terminal .flist {
@@ -4905,9 +4906,11 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   height: 100%;
-  gap: 20px;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .off-info {
@@ -4932,7 +4935,7 @@ body {
 
 .off-queue {
   width: 100%;
-  max-width: 300px;
+  max-width: 500px;
 }
 
 .queue-header {
@@ -4945,11 +4948,31 @@ body {
 
 .queue-empty {
   text-align: center;
-  padding: 20px;
+  padding: 24px 16px;
   color: var(--t2);
   font-size: 12px;
   background: var(--bg2);
   border-radius: var(--r2);
+}
+
+.queue-empty svg {
+  display: block;
+  margin: 0 auto 12px;
+  width: 32px;
+  height: 32px;
+}
+
+.queue-empty p {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--ok);
+}
+
+.queue-empty span {
+  font-size: 12px;
+  opacity: 0.8;
+  display: block;
 }
 
 .cmd-right {
