@@ -85,6 +85,51 @@ export async function POST(request: NextRequest) {
     if (orgId) {
       console.log("[Team Invite] Using organization:", orgId);
 
+      // Check if user is already a team member (active status)
+      const existingMember = await sql`
+        SELECT * FROM team_members 
+        WHERE LOWER(email) = ${email.toLowerCase()}
+        AND organization_id = ${orgId}
+        AND status IN ('active', 'confirmed')
+      `;
+
+      if (existingMember.length > 0) {
+        return NextResponse.json(
+          { error: "User is already a team member" },
+          { status: 400 }
+        );
+      }
+
+      // Check if there's already a pending invitation
+      const existingInvite = await sql`
+        SELECT * FROM team_invitations 
+        WHERE LOWER(email) = ${email.toLowerCase()}
+        AND organization_id = ${orgId}
+        AND status = 'pending'
+      `;
+
+      if (existingInvite.length > 0) {
+        return NextResponse.json(
+          { error: "Invitation already sent to this email" },
+          { status: 400 }
+        );
+      }
+
+      // Check if there's already a pending member entry
+      const existingPendingMember = await sql`
+        SELECT * FROM team_members 
+        WHERE LOWER(email) = ${email.toLowerCase()}
+        AND organization_id = ${orgId}
+        AND status = 'pending'
+      `;
+
+      if (existingPendingMember.length > 0) {
+        return NextResponse.json(
+          { error: "Invitation already sent to this email" },
+          { status: 400 }
+        );
+      }
+
       // Ensure inviter is in team_members table
       if (teamMembers.length === 0) {
         console.log("[Team Invite] Adding inviter to team_members table");
@@ -124,19 +169,63 @@ export async function POST(request: NextRequest) {
       SELECT id, email FROM users WHERE email = ${email.toLowerCase()}
     `;
 
-    // Check for existing invitation
+    // Check if user is already a team member (by email or by user_id if they exist)
+    const existingUserCheck = await sql`
+      SELECT id FROM users WHERE email = ${email.toLowerCase()}
+    `;
+
+    let existingMembers: any[] = [];
+    if (existingUserCheck.length > 0) {
+      // User exists, check if they're already a team member
+      existingMembers = await sql`
+        SELECT id, status FROM team_members 
+        WHERE (user_id = ${existingUserCheck[0].id} OR email = ${email.toLowerCase()})
+        AND organization_id = ${orgId}
+      `;
+    } else {
+      // User doesn't exist yet, check if there's an invitation by email
+      existingMembers = await sql`
+        SELECT id, status FROM team_members 
+        WHERE email = ${email.toLowerCase()}
+        AND organization_id = ${orgId}
+      `;
+    }
+
+    if (existingMembers.length > 0) {
+      return NextResponse.json(
+        { error: "This user is already a member of your organization" },
+        { status: 409 }
+      );
+    }
+
+    // Check for existing pending invitation
     const existingInvites = await sql`
-      SELECT id, status FROM team_invitations 
+      SELECT id, status, expires_at FROM team_invitations 
       WHERE email = ${email.toLowerCase()} 
       AND organization_id = ${orgId} 
       AND status = 'pending'
     `;
 
     if (existingInvites.length > 0) {
-      return NextResponse.json(
-        { error: "An invitation has already been sent to this email" },
-        { status: 409 }
-      );
+      // Check if the invitation has expired
+      const existingInvite = existingInvites[0];
+      const expiresAt = new Date(existingInvite.expires_at);
+      const now = new Date();
+
+      if (expiresAt < now) {
+        // Update expired invitation with new one
+        await sql`
+          UPDATE team_invitations 
+          SET status = 'expired', 
+          updated_at = ${new Date().toISOString()}
+          WHERE id = ${existingInvite.id}
+        `;
+      } else {
+        return NextResponse.json(
+          { error: "An invitation has already been sent to this email" },
+          { status: 409 }
+        );
+      }
     }
 
     // Generate invitation token
@@ -151,6 +240,13 @@ export async function POST(request: NextRequest) {
       RETURNING *
     `;
 
+    // Also add a pending entry in team_members so it shows in the members list with pending tag
+    await sql`
+      INSERT INTO team_members (id, user_id, organization_id, email, name, full_name, role, status, invited_by, joined_at, created_at, updated_at)
+      VALUES (${generateUUID()}, null, ${orgId}, ${email.toLowerCase()}, ${email.split('@')[0]}, ${email.split('@')[0]}, ${role || "member"}, ${"pending"}, ${userId}, ${new Date().toISOString()}, ${new Date().toISOString()}, ${new Date().toISOString()})
+    `;
+    console.log("[Team Invite] Added pending member entry for:", email.toLowerCase());
+
     // Get organization name for the notification
     const orgs = await sql`
       SELECT name FROM organizations WHERE id = ${orgId}
@@ -158,15 +254,20 @@ export async function POST(request: NextRequest) {
 
     // Check if invited user exists in the system
     const invitedUserProfiles = await sql`
-      SELECT id FROM profiles WHERE id IN (SELECT id FROM users WHERE email = ${email.toLowerCase()})
+      SELECT id, user_id FROM profiles WHERE email = ${email.toLowerCase()}
     `;
 
     // If the invited user exists, create a notification for them
     if (invitedUserProfiles.length > 0) {
+      // Use user_id if available, otherwise use id
+      const targetUserId = invitedUserProfiles[0].user_id || invitedUserProfiles[0].id;
       await sql`
         INSERT INTO notifications (id, user_id, type, title, message, data, read, created_at)
-        VALUES (${generateUUID()}, ${invitedUserProfiles[0].id}, ${"team_invite"}, ${"Team Invitation"}, ${`You have been invited to join ${orgs[0]?.name || 'an organization'}`}, ${JSON.stringify({ invite_token: invitationToken, organization_id: orgId, organization_name: orgs[0]?.name || 'Unknown Organization' })}, ${false}, ${new Date().toISOString()})
+        VALUES (${generateUUID()}, ${targetUserId}, ${"team_invite"}, ${"Team Invitation"}, ${`You have been invited to join ${orgs[0]?.name || 'an organization'}`}, ${JSON.stringify({ invite_token: invitationToken, organization_id: orgId, organization_name: orgs[0]?.name || 'Unknown Organization' })}, ${0}, ${new Date().toISOString()})
       `;
+      console.log("[Team Invite] Notification created for existing user:", targetUserId);
+    } else {
+      console.log("[Team Invite] No notification created - user not found in system:", email.toLowerCase());
     }
 
     // Generate invitation link
