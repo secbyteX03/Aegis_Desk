@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { NeonAuth } from "@/lib/neon-auth";
-import { sql } from "@/lib/neon/client";
+import { sql } from "@/lib/hybrid-db";
 import { randomBytes } from "crypto";
 import { Resend } from "resend";
 
@@ -63,14 +63,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user's organization
-    const profiles = await sql`
+    const profiles = await sql<any>`
       SELECT * FROM profiles WHERE id = ${userId}
     `;
 
     console.log("[Team Invite] Profile org:", profiles[0]?.organization_id);
 
     // Also check team_members table
-    const teamMembers = await sql`
+    const teamMembers = await sql<any>`
       SELECT * FROM team_members 
       WHERE user_id = ${userId} 
       AND organization_id = ${profiles[0]?.organization_id}
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       console.log("[Team Invite] Using organization:", orgId);
 
       // Check if user is already a team member (active status)
-      const existingMember = await sql`
+      const existingMember = await sql<any>`
         SELECT * FROM team_members 
         WHERE LOWER(email) = ${email.toLowerCase()}
         AND organization_id = ${orgId}
@@ -170,21 +170,21 @@ export async function POST(request: NextRequest) {
     `;
 
     // Check if user is already a team member (by email or by user_id if they exist)
-    const existingUserCheck = await sql`
+    const existingUserCheck = await sql<any>`
       SELECT id FROM users WHERE email = ${email.toLowerCase()}
     `;
 
     let existingMembers: any[] = [];
     if (existingUserCheck.length > 0) {
       // User exists, check if they're already a team member
-      existingMembers = await sql`
+      existingMembers = await sql<any>`
         SELECT id, status FROM team_members 
         WHERE (user_id = ${existingUserCheck[0].id} OR email = ${email.toLowerCase()})
         AND organization_id = ${orgId}
       `;
     } else {
       // User doesn't exist yet, check if there's an invitation by email
-      existingMembers = await sql`
+      existingMembers = await sql<any>`
         SELECT id, status FROM team_members 
         WHERE email = ${email.toLowerCase()}
         AND organization_id = ${orgId}
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for existing pending invitation
-    const existingInvites = await sql`
+    const existingInvites = await sql<any>`
       SELECT id, status, expires_at FROM team_invitations 
       WHERE email = ${email.toLowerCase()} 
       AND organization_id = ${orgId} 
@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
 
     // Create invitation record
-    const invitation = await sql`
+    const invitation = await sql<any>`
       INSERT INTO team_invitations (id, organization_id, email, role, invited_by, token, status, expires_at, created_at)
       VALUES (${generateUUID()}, ${orgId}, ${email.toLowerCase()}, ${role || "member"}, ${userId}, ${invitationToken}, ${"pending"}, ${expiresAt.toISOString()}, ${new Date().toISOString()})
       RETURNING *
@@ -248,19 +248,19 @@ export async function POST(request: NextRequest) {
     console.log("[Team Invite] Added pending member entry for:", email.toLowerCase());
 
     // Get organization name for the notification
-    const orgs = await sql`
+    const orgs = await sql<any>`
       SELECT name FROM organizations WHERE id = ${orgId}
     `;
 
-    // Check if invited user exists in the system
-    const invitedUserProfiles = await sql`
-      SELECT id FROM profiles WHERE email = ${email.toLowerCase()}
+    // Check if invited user exists in the system via users table
+    let targetUserId = null;
+    const usersResult = await sql<any>`
+      SELECT auth_id FROM users WHERE email = ${email.toLowerCase()}
     `;
 
-    // If the invited user exists, create a notification for them
-    if (invitedUserProfiles.length > 0) {
-      // Use id from profiles table
-      const targetUserId = invitedUserProfiles[0].id;
+    // If the invited user exists, use their auth_id
+    if (usersResult.length > 0) {
+      targetUserId = usersResult[0].auth_id;
       await sql`
         INSERT INTO notifications (id, user_id, type, title, message, data, read, created_at)
         VALUES (${generateUUID()}, ${targetUserId}, ${"team_invite"}, ${"Team Invitation"}, ${`You have been invited to join ${orgs[0]?.name || 'an organization'}`}, ${JSON.stringify({ invite_token: invitationToken, organization_id: orgId, organization_name: orgs[0]?.name || 'Unknown Organization' })}, ${0}, ${new Date().toISOString()})
@@ -365,7 +365,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Get user's organization
-    const profiles = await sql`
+    const profiles = await sql<any>`
       SELECT organization_id FROM profiles WHERE id = ${userId}
     `;
 

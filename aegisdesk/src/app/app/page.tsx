@@ -47,6 +47,7 @@ interface TeamMember {
   role: string;
   avatar?: string;
   status?: 'active' | 'pending';
+  isCurrentUser?: boolean;
 }
 
 interface Notification {

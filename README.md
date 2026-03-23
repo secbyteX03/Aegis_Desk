@@ -468,6 +468,12 @@ Use Incident 1 (Payment API) for this:
 1. Click **"Register"** to create an account
 2. Login with your credentials
 
+> **Test Credentials** (pre-configured demo account):
+> - Email: `testuser@gmail.com`
+> - Password: `Test@0001`
+
+> **Note:** The demo account has pre-populated incidents for testing AI agent functionality.
+
 ### Create Your First Incident
 
 1. Click **"New Incident"** button or use keyboard shortcut `Ctrl+N`
