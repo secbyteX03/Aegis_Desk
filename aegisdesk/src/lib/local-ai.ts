@@ -62,8 +62,8 @@ class LocalAIService {
             this.engine = await CreateMLCEngine(
                 MODEL_CONFIG.model,
                 {
-                    initProgressCallback: (progress) => {
-                        this.updateStatus({ progress: Math.round(progress * 100) });
+                    initProgressCallback: (report: any) => {
+                        this.updateStatus({ progress: Math.round((report.progress || 0) * 100) });
                     },
                 }
             );
@@ -83,8 +83,8 @@ class LocalAIService {
                 this.engine = await CreateMLCEngine(
                     MODEL_CONFIG.fallbackModel,
                     {
-                        initProgressCallback: (progress) => {
-                            this.updateStatus({ progress: Math.round(progress * 100) });
+                        initProgressCallback: (report: any) => {
+                            this.updateStatus({ progress: Math.round((report.progress || 0) * 100) });
                         },
                     }
                 );

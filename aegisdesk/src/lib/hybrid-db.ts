@@ -332,8 +332,8 @@ export async function hybridQuery<T = unknown>(
     if (orderBy) {
         const [field, direction] = orderBy.split(" ");
         data.sort((a, b) => {
-            const aVal = a[field];
-            const bVal = b[field];
+            const aVal = (a as any)[field];
+            const bVal = (b as any)[field];
             if (aVal < bVal) return direction === "ASC" ? -1 : 1;
             if (aVal > bVal) return direction === "ASC" ? 1 : -1;
             return 0;
@@ -371,7 +371,7 @@ async function clientUnsafe(query: string, params: unknown[] = []): Promise<unkn
         }
 
         // For non-SELECT queries or other results, return as array
-        return result as unknown[];
+        return result as unknown as unknown[];
     } catch (error) {
         console.error("[HybridDB] Neon query error:", error);
         throw error;
@@ -447,9 +447,10 @@ export async function hybridInsert<T = unknown>(
         localDb[table] = [];
     }
 
+    const recordAny = record as any;
     const recordWithId = {
         ...record,
-        id: record.id || `${table}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        id: recordAny.id || `${table}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     };
 
     localDb[table].push(recordWithId);

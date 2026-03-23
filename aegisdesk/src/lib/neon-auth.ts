@@ -74,8 +74,10 @@ export interface TeamMember {
     organization_id: string;
     email: string;
     full_name?: string;
+    name?: string;
     role: string;
     status: string;
+    isCurrentUser?: boolean;
     invited_by?: string;
     invited_at?: string;
     joined_at?: string;
@@ -261,7 +263,7 @@ export class NeonAuth {
     }
 
     // Verify JWT token (static method)
-    static async verifyToken(token: string): Promise<{ success: boolean; user?: { id: string; email?: string }; error?: string }> {
+    static async verifyToken(token: string): Promise<{ success: boolean; user?: { id: string; email?: string; full_name?: string }; error?: string }> {
         try {
             const { valid, userId, email } = await verifyToken(token);
 
@@ -271,7 +273,7 @@ export class NeonAuth {
 
             return {
                 success: true,
-                user: { id: userId, email },
+                user: { id: userId, email, full_name: undefined },
             };
         } catch (error) {
             console.error("[NeonAuth] verifyToken error:", error);

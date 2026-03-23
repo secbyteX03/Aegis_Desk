@@ -41,7 +41,8 @@ export const isNeonConfigured = (): boolean => {
 
 // Export the SQL function - gets fresh client on each call
 // This ensures we always use the latest DATABASE_URL from environment
-export function sql<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> {
+// Default to Record<string, any> for easier property access
+export function sql<T = Record<string, any>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> {
   const client = getNeonClient();
   if (!client) {
     throw new Error("[Neon] Database URL not configured! Set DATABASE_URL in .env");

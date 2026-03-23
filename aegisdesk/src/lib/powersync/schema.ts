@@ -236,12 +236,12 @@ export const AegisSchema = new Schema({
 
 // Export types for TypeScript support
 export type Database = typeof AegisSchema;
-export type IncidentRecord = Database["incidents"];
-export type TimelineEventRecord = Database["timelineEvents"];
-export type LogRecord = Database["logs"];
-export type AgentRecord = Database["agents"];
-export type WorkflowRecord = Database["workflows"];
-export type AuditLogRecord = Database["auditLog"];
-export type PresenceRecord = Database["presence"];
-export type NotificationRecord = Database["notifications"];
-export type SyncQueueRecord = Database["syncQueue"];
+export type IncidentRecord = Database extends { incidents: infer T } ? T : any;
+export type TimelineEventRecord = Database extends { timelineEvents: infer T } ? T : any;
+export type LogRecord = Database extends { logs: infer T } ? T : any;
+export type AgentRecord = Database extends { agents: infer T } ? T : any;
+export type WorkflowRecord = Database extends { workflows: infer T } ? T : any;
+export type AuditLogRecord = Database extends { auditLog: infer T } ? T : any;
+export type PresenceRecord = Database extends { presence: infer T } ? T : any;
+export type NotificationRecord = Database extends { notifications: infer T } ? T : any;
+export type SyncQueueRecord = Database extends { syncQueue: infer T } ? T : any;
