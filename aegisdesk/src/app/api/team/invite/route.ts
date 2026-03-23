@@ -254,13 +254,13 @@ export async function POST(request: NextRequest) {
 
     // Check if invited user exists in the system
     const invitedUserProfiles = await sql`
-      SELECT id, user_id FROM profiles WHERE email = ${email.toLowerCase()}
+      SELECT id FROM profiles WHERE email = ${email.toLowerCase()}
     `;
 
     // If the invited user exists, create a notification for them
     if (invitedUserProfiles.length > 0) {
-      // Use user_id if available, otherwise use id
-      const targetUserId = invitedUserProfiles[0].user_id || invitedUserProfiles[0].id;
+      // Use id from profiles table
+      const targetUserId = invitedUserProfiles[0].id;
       await sql`
         INSERT INTO notifications (id, user_id, type, title, message, data, read, created_at)
         VALUES (${generateUUID()}, ${targetUserId}, ${"team_invite"}, ${"Team Invitation"}, ${`You have been invited to join ${orgs[0]?.name || 'an organization'}`}, ${JSON.stringify({ invite_token: invitationToken, organization_id: orgId, organization_name: orgs[0]?.name || 'Unknown Organization' })}, ${0}, ${new Date().toISOString()})
