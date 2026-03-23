@@ -1,9 +1,12 @@
 [build]
-  command = "npm run build"
+  command = "npm_config_node_version=22 npm run build"
   publish = ".next"
 
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 [[redirects]]
   from = "/sw.js"
