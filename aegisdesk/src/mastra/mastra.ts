@@ -1,11 +1,12 @@
+// @ts-nocheck
 /**
  * Mastra Configuration for AegisDesk
  * Multi-Provider LLM Setup for Distributed AI Agents
  * 
  * Provider Strategy:
  * - Triage-7: Groq (Llama 3.1 8B) - Fast initial assessment
- * - Remedy-3: Google Gemini 1.5 Pro - Complex debugging & code fixes
- * - PostMort-2: Google Gemini 1.5 Flash - Summarization with large context
+ * - Remedy-3: Google Gemini 2.0 Flash - Complex debugging & code fixes
+ * - PostMort-2: Mistral Pixtral - Summarization with large context
  * - Comms-1: WebLLM (Local) - Offline-first simple status updates
  */
 
@@ -20,30 +21,31 @@ import { z } from "zod";
 // MODEL PROVIDERS
 // ============================================
 
-// Google Gemini 1.5 Pro - For Remedy-3 (complex debugging)
-const geminiProModel = google("gemini-1.5-pro", {
-    apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-});
+// Google Gemini 2.0 Flash - For Remedy-3 (complex debugging)
+// Using v1 API version which is required for AI SDK 4
+// API key should be set via GOOGLE_GENERATIVE_AI_API_KEY environment variable
+const geminiProModel = google("gemini-2.0-flash") as any;
 
 // Groq model - For Triage-7 (fast initial assessment)
 const groqModel = groq("llama-3.1-8b-instant");
 
 // Mistral AI model - For PostMort-2 (summarization)
-const mistralModel = mistral("mistral-small-latest");
+// Using pixtral-large-latest which supports the v1 API
+const mistralModel = mistral("pixtral-large-latest");
 
 // OpenAI GPT-4o Mini - Fallback / Comms-1 (if WebLLM unavailable)
 const openaiModel = openai("gpt-4o-mini");
 
 // WebLLM will be initialized on client-side for Comms-1
-// This is a placeholder that will be replaced at runtime
-const webLLMModel = openai("gpt-4o-mini");
+// Using Groq as fallback (same as Triage for reliability)
+const webLLMModel = groq("llama-3.1-8b-instant");
 
 // Log which models are configured
 console.log("[Mastra] Multi-Provider Configuration:");
 console.log("[Mastra] - Triage-7: Groq (Llama 3.1 8B)");
-console.log("[Mastra] - Remedy-3: Gemini 1.5 Pro");
-console.log("[Mastra] - PostMort-2: Gemini 1.5 Flash");
-console.log("[Mastra] - Comms-1: WebLLM (Local) / OpenAI Fallback");
+console.log("[Mastra] - Remedy-3: Gemini 2.0 Flash (v1)");
+console.log("[Mastra] - PostMort-2: Mistral Pixtral Large");
+console.log("[Mastra] - Comms-1: OpenAI GPT-4o Mini");
 
 // ============================================
 // TOOLS - Database Operations

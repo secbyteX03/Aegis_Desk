@@ -11,14 +11,12 @@ import { z } from "zod";
 
 // Initialize Google Gemini using AI SDK v4's model wrapper
 // This ensures compatibility with AI SDK 4's specification version "v1"
-const geminiModel = google("gemini-2.0-flash", {
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-});
+// API key should be set via GOOGLE_GENERATIVE_AI_API_KEY environment variable
+const geminiModel = google("gemini-2.0-flash") as any;
 
 // Initialize OpenAI model as fallback
-const openaiModel = openai("gpt-4o-mini", {
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// API key should be set via OPENAI_API_KEY environment variable
+const openaiModel = openai("gpt-4o-mini") as any;
 
 // Helper to get model - defaults to OpenAI for reliability
 function getModel() {

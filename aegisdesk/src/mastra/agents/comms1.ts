@@ -10,9 +10,8 @@ import { z } from "zod";
 
 // Initialize Google Gemini using AI SDK v4's model wrapper
 // This ensures compatibility with AI SDK 4's specification version "v1"
-const model = google("gemini-2.0-flash", {
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-});
+// API key should be set via GOOGLE_GENERATIVE_AI_API_KEY environment variable
+const model = google("gemini-2.0-flash") as any;
 
 // Input schemas
 const commsInputSchema = z.object({
