@@ -89,7 +89,7 @@ export async function POST(
                 { role: "user", content: JSON.stringify(remedyInput) },
             ]);
 
-            const remedyOutput = remedyResult.text || remedyResult.content;
+            const remedyOutput = (remedyResult as any).text;
             let remedyData;
             try {
                 remedyData = JSON.parse(remedyOutput);
@@ -136,7 +136,7 @@ export async function POST(
                 { role: "user", content: JSON.stringify(commsInput) },
             ]);
 
-            const commsOutput = commsResult.text || commsResult.content;
+            const commsOutput = (commsResult as any).text;
             let commsData;
             try {
                 commsData = JSON.parse(commsOutput);
@@ -167,7 +167,7 @@ export async function POST(
                 { role: "user", content: JSON.stringify(postMortemInput) },
             ]);
 
-            const postMortemOutput = postMortemResult.text || postMortemResult.content;
+            const postMortemOutput = (postMortemResult as any).text;
             let postMortemData;
             try {
                 postMortemData = JSON.parse(postMortemOutput);
