@@ -27,16 +27,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Cast to any to handle potential type mismatches from NeonAuth
+    const resultData = result as any;
+
     return NextResponse.json({
       valid: true,
       user: {
-        id: result.user?.id,
-        email: result.user?.email,
-        name: result.user?.full_name,
-        avatarUrl: result.user?.avatar_url,
-        organizationId: result.profile?.organization_id,
-        organizationName: result.organization?.name,
-        role: result.profile?.role,
+        id: resultData.user?.id,
+        email: resultData.user?.email,
+        name: resultData.user?.full_name,
+        avatarUrl: resultData.user?.avatar_url,
+        organizationId: resultData.profile?.organization_id,
+        organizationName: resultData.organization?.name,
+        role: resultData.profile?.role,
       },
     });
   } catch (error) {
@@ -55,7 +58,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization");
-    
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json(
         { valid: false, error: "No token provided" },
@@ -64,7 +67,7 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    
+
     // Verify token with Neon
     const result = await NeonAuth.verifyToken(token);
 
@@ -75,10 +78,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Cast to any to handle potential type mismatches from NeonAuth
+    const resultData = result as any;
+
     return NextResponse.json({
       valid: true,
-      userId: result.user?.id,
-      organizationId: result.profile?.organization_id,
+      userId: resultData.user?.id,
+      organizationId: resultData.profile?.organization_id,
     });
   } catch (error) {
     console.error("[Verify] GET Error:", error);

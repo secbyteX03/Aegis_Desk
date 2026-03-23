@@ -54,11 +54,11 @@ export async function GET() {
             )
         ]);
 
-        const recentCount = Number(recentIncidents[0]?.count || 0);
-        const hourCount = Number(hourIncidents[0]?.count || 0);
-        const dayCount = Number(dayIncidents[0]?.count || 0);
-        const activeCount = Number(activeIncidents[0]?.count || 0);
-        const timelineCount = Number(totalTimeline[0]?.count || 0);
+        const recentCount = Number((recentIncidents[0] as any)?.count || 0);
+        const hourCount = Number((hourIncidents[0] as any)?.count || 0);
+        const dayCount = Number((dayIncidents[0] as any)?.count || 0);
+        const activeCount = Number((activeIncidents[0] as any)?.count || 0);
+        const timelineCount = Number((totalTimeline[0] as any)?.count || 0);
 
         const errorsPerSec = Math.max(0.1, recentCount + Math.random() * 5);
         const baseLatency = 50 + (timelineCount * 2);

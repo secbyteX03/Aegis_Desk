@@ -37,8 +37,8 @@ export async function GET() {
       LIMIT 10
     `;
 
-        const timelineEvents = timelineEventsResult;
-        const agents = agentsResult;
+        const timelineEvents = timelineEventsResult as any[];
+        const agents = agentsResult as any[];
 
         // Combine timeline events into activities
         const activities = timelineEvents.map(event => ({
@@ -50,7 +50,8 @@ export async function GET() {
             incidentId: event.incident_id,
             incidentTitle: event.incident_title,
             timestamp: event.timestamp,
-            status: event.event_type === 'resolved' ? 'completed' : 'in_progress'
+            status: event.event_type === 'resolved' ? 'completed' : 'in_progress',
+            progress: null
         }));
 
         // Add agent status as activities

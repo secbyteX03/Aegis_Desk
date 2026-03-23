@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const tool = tools[toolName as keyof typeof tools];
+        const tool = tools[toolName as keyof typeof tools]!;
         if (!tool) {
             return NextResponse.json(
                 { error: `Tool not found: ${toolName}. Available tools: ${Object.keys(tools).join(", ")}` },
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
         console.log(`[Tools API] Input:`, input);
 
         // Execute the tool
-        const result = await tool.execute({ context: input });
+        const result = await (tool as any).execute({ context: input });
 
         console.log(`[Tools API] Tool ${toolName} executed successfully`);
 

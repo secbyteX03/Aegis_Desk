@@ -9,10 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ai-sdk/google": "^1.0.0",
+    "@ai-sdk/google": "^3.0.52",
     "@ai-sdk/groq": "^3.0.31",
     "@ai-sdk/mistral": "^3.0.27",
-    "@ai-sdk/openai": "^1.0.0",
+    "@ai-sdk/openai": "^3.0.47",
     "@journeyapps/wa-sqlite": "^1.5.0",
     "@mastra/core": "^0.8.1",
     "@mlc-ai/web-llm": "^0.2.82",
@@ -37,6 +37,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/uuid": "^10.0.0",
     "typescript": "^5.0.0"
   }
 }
