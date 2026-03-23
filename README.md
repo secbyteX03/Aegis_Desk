@@ -6,21 +6,21 @@ A real-time collaborative incident response platform where human operators and s
 
 ## Table of Contents
 
-- [🚨 The Problem](#the-problem)
-- [💡 The Solution](#the-solution)
-- [🚀 Features](#features)
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
+- [Features](#features)
   - [Real-Time Collaboration](#real-time-collaboration)
   - [AI-Powered Response](#ai-powered-response)
   - [Modern Incident Management](#modern-incident-management)
   - [Enterprise Ready](#enterprise-ready)
-- [🏗️ Architecture](#architecture)
-- [📋 Prerequisites](#prerequisites)
-- [🛠️ Installation](#installation)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
   - [1. Clone and Install Dependencies](#1-clone-and-install-dependencies)
   - [2. Environment Configuration](#2-environment-configuration)
   - [3. Database Setup](#3-database-setup)
   - [4. Run Development Server](#4-run-development-server)
-- [🧪 Test Incidents](#test-incidents)
+- [Test Incidents](#test-incidents)
   - [Incident 1 — SEV-1 — Payment API Down](#incident-1--sev-1--payment-api-down)
   - [Incident 2 — SEV-2 — Database Connection Pool Exhausted](#incident-2--sev-2--database-connection-pool-exhausted)
   - [Incident 3 — SEV-2 — Auth Service Latency Spike](#incident-3--sev-2--auth-service-latency-spike)
@@ -28,23 +28,23 @@ A real-time collaborative incident response platform where human operators and s
   - [Incident 5 — SEV-1 — Complete API Gateway Outage](#incident-5--sev-1--complete-api-gateway-outage)
   - [Testing Checklist Per Incident](#testing-checklist-per-incident)
   - [Offline Test](#offline-test)
-- [🚀 Quick Start](#quick-start)
+- [Quick Start](#quick-start)
   - [Create an Account](#create-an-account)
   - [Create Your First Incident](#create-your-first-incident)
   - [Use AI Agents](#use-ai-agents)
   - [Timeline](#timeline)
-- [📱 Usage](#usage)
+- [Usage](#usage)
   - [Keyboard Shortcuts](#keyboard-shortcuts)
   - [Incident Workflow](#incident-workflow)
-- [🔧 Configuration](#configuration)
+- [Configuration](#configuration)
   - [Environment Variables](#environment-variables)
   - [Feature Flags](#feature-flags)
-- [📂 Project Structure](#project-structure)
-- [🔒 Security](#security)
-- [📊 Tech Stack](#tech-stack)
-- [🤝 Contributing](#contributing)
+- [Project Structure](#project-structure)
+- [Security](#security)
+- [Tech Stack](#tech-stack)
+- [Contributing](#contributing)
 
-## 🚨 The Problem
+## The Problem
 
 When production goes down, teams face chaos:
 
@@ -54,7 +54,7 @@ When production goes down, teams face chaos:
 4. **Agent Isolation** - AI agents can't see what other agents are doing
 5. **Knowledge Loss** - Important learnings are lost after incident resolution
 
-## 💡 The Solution
+## The Solution
 
 **AegisDesk** provides a **shared incident command center** where:
 
@@ -64,7 +64,7 @@ When production goes down, teams face chaos:
 - **Offline-capable** - works in tunnels, planes, basements
 - **PowerSync** syncs state instantly across humans, agents, and devices
 
-## 🚀 Features
+## Features
 
 ### Real-Time Collaboration
 
@@ -87,7 +87,16 @@ When production goes down, teams face chaos:
 - **Command Interface** - Quick actions via input field
 - **Drag & Drop Logs** - Drop log files for instant analysis
 
-### Enterprise Ready
+### Workspace Tabs
+
+The application provides four workspace tabs for comprehensive incident management:
+
+- **Workflow Tab** - Displays AI agent workflow execution status and history, with data persisted via localStorage to survive page reloads
+- **Trace Tab** - Shows detailed execution traces from the Mastra workflow system
+- **Runbook Tab** - Presents runbook content extracted from workflow responses
+- **Offline Tab** - Displays the sync queue status for offline operations
+
+All tabs feature localStorage persistence, ensuring data remains available even after browser refresh or server restart. The offline tab also includes improved styling to prevent content cut-off.
 
 - **Neon PostgreSQL** - Serverless scalable database (single source of truth)
 - **Neon Auth** - Secure user authentication
@@ -149,7 +158,7 @@ AegisDesk uses **Mastra** as an AI orchestration layer to coordinate multiple fr
 3. **Human-in-the-Loop** - Supports suspending workflows for human approval
 4. **Tool Integration** - Agents can use tools to write to timeline, synced via PowerSync to Neon
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Node.js 18+
 - Neon Account (for PostgreSQL database and authentication)
@@ -452,7 +461,7 @@ Use Incident 1 (Payment API) for this:
 7. Watch queue empty and sync pill turn green
 8. Check Neon SQL Editor → data should now be in the database
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Create an Account
 
@@ -482,7 +491,7 @@ Use Incident 1 (Payment API) for this:
 - Use the command input to add notes
 - View chronological history of incident response
 
-## 📱 Usage
+## Usage
 
 ### Keyboard Shortcuts
 
@@ -503,7 +512,7 @@ Use Incident 1 (Payment API) for this:
 5. **Document** - Generate post-mortem with PostMort-2
 6. **Resolve** - Close the incident
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -561,13 +570,13 @@ AegisDesk/
 │   └── check-incidents.js   # Check incidents
 ```
 
-## 🔒 Security
+## Security
 
 - Neon-based JWT authentication
 - Environment variables for secrets
 - Row-level security in database
 
-## 📊 Tech Stack
+## Tech Stack
 
 - **Frontend**: Next.js 16, React 19, TypeScript
 - **Database**: Neon PostgreSQL (serverless)

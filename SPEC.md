@@ -166,10 +166,13 @@ AegisDesk/                          # Root project directory
 
 #### Workspace Panel (Center)
 
-- Tabbed interface: Summary | Logs | Runbook
+- Tabbed interface: Summary | Logs | Runbook | Workflow | Trace | Offline
 - Summary: AI-generated incident summary
 - Logs: Parsed, searchable log entries
 - Runbook: Suggested + linked playbooks
+- Workflow: AI agent workflow execution status and history (persisted via localStorage)
+- Trace: Detailed execution traces from the Mastra workflow system
+- Offline: Sync queue status for offline operations with improved content visibility
 
 #### Command Input (Bottom)
 
